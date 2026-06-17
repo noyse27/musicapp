@@ -13,29 +13,38 @@ A self-hosted music archive web app for Synology NAS (or any Docker host). Brows
 - **Facet filters** — genre, decade, year range, duration, format, bitrate, artist/title initial
 - **Cover art** with colored initials fallback
 - **HTTP range streaming** — seekable audio in the browser
-- **Radio / Shuffle mode** — 25 random tracks, auto-refills, crossfade (15 s fade-out / 10 s fade-in)
+- **Radio / Shuffle mode** — starts instantly, equal-power crossfade (12 s out / 8 s in), next track pre-buffered silently before crossfade begins
+- **Mini-player** — detachable floating player, freely draggable, docks back to the bar with one click
 - **Download basket** — select tracks and export as ZIP
-- **Background scanner** — indexes your music library without blocking the UI
-- **Play count tracking** — reads and writes ID3 `PCNT` (MP3), Vorbis comment (FLAC), iTunes tag (M4A) at 90 % playback
+- **Background scanner** — indexes your music library without blocking the UI; re-scans skip unchanged files (mtime check) for fast incremental updates
+- **Play count tracking** — reads and writes ID3 `PCNT` (MP3), Vorbis comment (FLAC), iTunes tag (M4A) at 90 % playback; uses `MAX(tag, db) + 1` to protect counts from external players
 - **Last.fm integration** — Now Playing, Scrobble (at 50 %), Love / Unlove tracks
+- **Now Playing in browser tab** — page title updates to `Track – Artist` while playing
+- **Cover art** with colored initials fallback; broken images automatically replaced by initials
 - **Dark mode** — warm gray palette
 
 ## Screenshot
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Musikarchiv                          🎵 user  🛒   │
-├──────────┬──────────────────────────────────────────┤
-│ Interpret│  🔍 Search...              Sortieren ▾   │
-│ Genre    ├──────────────────────────────────────────┤
-│ Jahrzehnt│  12.450 Tracks                    ☰  ⊞  │
-│ Länge    ├──────────────────────────────────────────┤
-│ Format   │  ▶  Track title            MP3  3:45  ♡ │
-│ Bitrate  │  ▶  Track title            MP3  5:12  ♡ │
-│          │  ...                                     │
-├──────────┴──────────────────────────────────────────┤
-│  ⏮  ▶  ⏭   ──────────────────────  0:42 / 3:45  ♡│
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Musikarchiv          Last.fm: user   Mini  🛒              │
+├──────────┬──────────────────────────────────────────────────┤
+│ Interpret│  🔍 Search...                      Sortieren ▾   │
+│ Genre    ├──────────────────────────────────────────────────┤
+│ Jahrzehnt│  12.450 Tracks                          ☰  ⊞    │
+│ Länge    ├──────────────────────────────────────────────────┤
+│ Format   │  ▶  Track title               MP3  3:45  ♡  ⬇  │
+│ Bitrate  │  ▶  Track title               MP3  5:12  ♡  ⬇  │
+│          │  ...                                             │
+├──────────┴──────────────────────────────────────────────────┤
+│  ⏮  ▶  ⏭   ──────────────────────  0:42 / 3:45  🔊  ♡   │
+└─────────────────────────────────────────────────────────────┘
+
+                              ┌──────────────────┐
+                              │ ≡ Track title  ✕ │  ← Mini-player
+                              │   Artist name    │     (floating,
+                              │  ⏮   ▶   ⏭    │      draggable)
+                              └──────────────────┘
 ```
 
 ## Requirements
@@ -104,6 +113,10 @@ To disconnect, click the **✕** next to your username.
 | Now Playing | Immediately when a track starts |
 | Scrobble | After 50 % playback (min. 30 s) |
 | Love / Unlove | Heart button in player or track row |
+
+## Mini-Player
+
+Click **Mini** in the top bar to detach a floating player. It shows cover art, track title, artist, and play/pause/skip controls. Drag it anywhere on screen; click the dock button (↙) to snap it back to the main player bar.
 
 ## Play Count
 
