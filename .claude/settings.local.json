@@ -17,7 +17,11 @@
       "Skill(code-review:*)",
       "Bash(git checkout *)",
       "Bash(gh pr create --title 'Fix 4 security review findings' --body ' *)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(gh pr *)",
+      "Bash(gh --version)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr list --head feature/miniplayer-popup --json url --jq '.[0].url')",
+      "Bash('/c/Program Files/GitHub CLI/gh.exe' pr create --title 'Add popup mini-player with love heart and scrolling tab title' --body ' *)"
     ]
   }
 }

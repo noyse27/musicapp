@@ -1,4 +1,4 @@
-# Musikarchiv
+# Adolar
 
 A self-hosted music archive web app for Synology NAS (or any Docker host). Browse, search, and stream your local MP3/FLAC/M4A collection from any browser — no cloud required.
 
@@ -27,7 +27,7 @@ A self-hosted music archive web app for Synology NAS (or any Docker host). Brows
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Musikarchiv          Last.fm: user   Mini  🛒              │
+│  Adolar          Last.fm: user   Mini  🛒              │
 ├──────────┬──────────────────────────────────────────────────┤
 │ Interpret│  🔍 Search...                      Sortieren ▾   │
 │ Genre    ├──────────────────────────────────────────────────┤
@@ -84,7 +84,7 @@ Point the music volume at your library:
 ```yaml
 volumes:
   - /volume1/music:/music:ro   # adjust to your path
-  - musikarchiv-data:/data
+  - adolar-data:/data
 ```
 
 ### 4. Run
@@ -135,7 +135,7 @@ On playback (90 % reached), the app reads the current tag value first and uses `
 | Variable | Default | Description |
 |---|---|---|
 | `MUSIC_ROOT` | `/music` | Path to music library inside container |
-| `DB_PATH` | `/data/musikarchiv.db` | SQLite database path |
+| `DB_PATH` | `/data/adolar.db` | SQLite database path |
 | `LASTFM_API_KEY` | — | Last.fm API key |
 | `LASTFM_API_SECRET` | — | Last.fm shared secret |
 | `CORS_ORIGINS` | *(none)* | Space-separated allowed origins (empty = deny all cross-origin) |

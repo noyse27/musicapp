@@ -234,7 +234,7 @@ def api_download():
             zf.write(path, arcname)
 
     buf.seek(0)
-    filename = f"musikarchiv_{int(time.time())}.zip"
+    filename = f"adolar_{int(time.time())}.zip"
     return send_file(buf, mimetype="application/zip",
                      as_attachment=True, download_name=filename)
 

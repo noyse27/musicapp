@@ -2,7 +2,7 @@ import sqlite3
 import os
 from contextlib import contextmanager
 
-DB_PATH = os.environ.get("DB_PATH", "/data/musikarchiv.db")
+DB_PATH = os.environ.get("DB_PATH", "/data/adolar.db")
 
 
 def get_connection():

@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Musikarchiv</title>
+  <title>Adolar</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
   <style>
     :root {
       --accent:        #7F77DD;
@@ -72,12 +74,20 @@
     #topbar-logo {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: var(--text-lg);
-      font-weight: 500;
+      gap: 10px;
       color: var(--text-primary);
     }
     #topbar-logo i { font-size: 20px; color: var(--accent); }
+    #topbar-logo span {
+      font-family: "Orbitron", sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--accent) 0%, #b8b4f0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
     #topbar-meta {
       font-size: var(--text-sm);
       color: var(--text-tertiary);
@@ -739,7 +749,7 @@
 <div id="topbar">
   <div id="topbar-logo">
     <i class="ti ti-music"></i>
-    Musikarchiv
+    <span>Adolar</span>
   </div>
   <div id="topbar-meta">Lade…</div>
   <div id="lastfm-status" style="flex-shrink:0;display:flex;align-items:center;gap:8px;font-size:var(--text-sm);color:var(--text-tertiary)"></div>
@@ -1043,7 +1053,7 @@ $("btn-basket-download").onclick = async () => {
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = "musikarchiv.zip"; a.click();
+    a.href = url; a.download = "adolar.zip"; a.click();
     URL.revokeObjectURL(url);
     basket.clear();
     basketTracks.clear();
@@ -1316,7 +1326,7 @@ let _titleTimer = null;
 
 function startTitleScroll(text) {
   if (_titleTimer) { clearInterval(_titleTimer); _titleTimer = null; }
-  if (!text) { document.title = "Musikarchiv"; return; }
+  if (!text) { document.title = "Adolar"; return; }
 
   const full   = `${text}   ·   `;  // separator between repetitions
   const STATIC = 5000;   // ms to hold before scrolling
@@ -1607,7 +1617,7 @@ $("btn-radio").onclick = () => {
 };
 
 // ── Mini-Player Popup ─────────────────────────────────────
-const miniCh = new BroadcastChannel("musikarchiv-player");
+const miniCh = new BroadcastChannel("adolar-player");
 let miniWin = null;
 
 function miniIsOpen() {
@@ -1661,7 +1671,7 @@ miniCh.onmessage = e => {
 
 $("btn-miniplayer").onclick = () => {
   if (miniIsOpen()) { miniWin.focus(); return; }
-  miniWin = window.open("/miniplayer", "musikarchiv-mini",
+  miniWin = window.open("/miniplayer", "adolar-mini",
     "width=320,height=200,resizable=no,toolbar=no,menubar=no,location=no,status=no");
 };
 
