@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  musikarchiv:
+    build: .
+    container_name: musikarchiv
+    restart: unless-stopped
+    ports:
+      - "15002:5000"
+    volumes:
+      - /volume1/music:/music:ro          # Synology music share (read-only)
+      - musikarchiv-data:/data            # SQLite DB + cover cache
+    environment:
+      MUSIC_ROOT: /music
+      DB_PATH: /data/musikarchiv.db
+      LASTFM_API_KEY: ${LASTFM_API_KEY}
+      LASTFM_API_SECRET: ${LASTFM_API_SECRET}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/scan/status')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  musikarchiv-data:
