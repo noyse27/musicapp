@@ -1433,6 +1433,7 @@ audio.onpause = () => {
 };
 audio.onended = async () => {
   if (radio.active) {
+    if (radio.cfActive) return; // crossfade already handles the transition
     await radioNext();
     if (radio.queue.length) playTrack(0);
   } else {
