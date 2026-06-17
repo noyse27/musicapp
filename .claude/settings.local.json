@@ -14,7 +14,10 @@
       "Bash(git push *)",
       "Bash(git tag *)",
       "Skill(code-review)",
-      "Skill(code-review:*)"
+      "Skill(code-review:*)",
+      "Bash(git checkout *)",
+      "Bash(gh pr create --title 'Fix 4 security review findings' --body ' *)",
+      "Bash(git pull *)"
     ]
   }
 }
