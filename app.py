@@ -49,6 +49,11 @@ def index():
     return render_template("index.html")
 
 
+@app.get("/miniplayer")
+def miniplayer():
+    return render_template("miniplayer.html")
+
+
 # ── Tracks ────────────────────────────────────────────────────────────────────
 
 @app.get("/api/search")

@@ -704,75 +704,6 @@
 
     audio { display: none; }
 
-    /* ── Mini-Player ─────────────────────────────────── */
-    #mini-player {
-      display: none;
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 1000;
-      width: 280px;
-      background: var(--bg-primary);
-      border: 0.5px solid var(--border-subtle);
-      border-radius: 14px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.45);
-      padding: 12px 14px;
-      gap: 10px;
-      flex-direction: column;
-      user-select: none;
-    }
-    #mini-player.visible { display: flex; }
-    #mini-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    #mini-cover-wrap {
-      width: 36px; height: 36px;
-      border-radius: 6px;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-    #mini-cover-wrap img, #mini-cover-wrap .cover-placeholder {
-      width: 100%; height: 100%; object-fit: cover; border-radius: 6px;
-    }
-    #mini-cover-wrap .cover-placeholder {
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; color: #fff;
-      background: var(--accent-deep);
-    }
-    #mini-info { flex: 1; min-width: 0; }
-    #mini-title {
-      font-size: var(--text-sm); font-weight: 500;
-      color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #mini-artist {
-      font-size: var(--text-xs); color: var(--text-secondary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #mini-dock {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-tertiary); font-size: 14px; padding: 2px;
-      flex-shrink: 0;
-    }
-    #mini-dock:hover { color: var(--text-primary); }
-    #mini-controls {
-      display: flex; align-items: center; justify-content: center; gap: 12px;
-    }
-    .mini-btn {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-secondary); padding: 4px; border-radius: 4px;
-      transition: color .1s;
-    }
-    .mini-btn:hover { color: var(--text-primary); }
-    .mini-btn i { font-size: 18px; }
-    #mini-play-btn i { font-size: 22px; color: var(--text-primary); }
-    #mini-drag-handle {
-      position: absolute; top: 0; left: 0; right: 44px; height: 20px;
-      cursor: grab;
-    }
-    #mini-drag-handle:active { cursor: grabbing; }
     #btn-miniplayer {
       background: none;
       border: 0.5px solid var(--border-subtle);
@@ -1027,25 +958,6 @@
 <audio id="audio"></audio>
 <audio id="audio-b"></audio>
 
-<!-- ── Mini-Player ── -->
-<div id="mini-player">
-  <div id="mini-drag-handle"></div>
-  <div id="mini-header">
-    <div id="mini-cover-wrap">
-      <div class="cover-placeholder" style="background:var(--accent-deep)"></div>
-    </div>
-    <div id="mini-info">
-      <div id="mini-title">—</div>
-      <div id="mini-artist"></div>
-    </div>
-    <button id="mini-dock" title="Andocken"><i class="ti ti-player-eject" style="transform:rotate(180deg)"></i></button>
-  </div>
-  <div id="mini-controls">
-    <button class="mini-btn" id="mini-prev"><i class="ti ti-player-skip-back"></i></button>
-    <button class="mini-btn" id="mini-play-btn"><i class="ti ti-player-play"></i></button>
-    <button class="mini-btn" id="mini-next"><i class="ti ti-player-skip-forward"></i></button>
-  </div>
-</div>
 
 <script>
 const API = "";
@@ -1399,13 +1311,43 @@ function renderPagination() {
   pg.appendChild(next);
 }
 
+// ── Scrolling tab title ────────────────────────────────────
+let _titleTimer = null;
+
+function startTitleScroll(text) {
+  if (_titleTimer) { clearInterval(_titleTimer); _titleTimer = null; }
+  if (!text) { document.title = "Musikarchiv"; return; }
+
+  const full   = `${text}   ·   `;  // separator between repetitions
+  const STATIC = 5000;   // ms to hold before scrolling
+  const STEP   = 150;    // ms per character step
+  let pos = 0;
+  let phase = "static"; // "static" | "scroll" | "pause"
+  let elapsed = 0;
+
+  document.title = text;
+
+  _titleTimer = setInterval(() => {
+    if (phase === "static") {
+      elapsed += STEP;
+      if (elapsed >= STATIC) { phase = "scroll"; elapsed = 0; pos = 0; }
+    } else if (phase === "scroll") {
+      pos = (pos + 1) % full.length;
+      const display = (full + full).slice(pos, pos + text.length);
+      document.title = display;
+      if (pos === 0) { phase = "pause"; elapsed = 0; document.title = text; }
+    } else {
+      elapsed += STEP;
+      if (elapsed >= STATIC) { phase = "scroll"; elapsed = 0; pos = 0; }
+    }
+  }, STEP);
+}
+
 // ── Player ─────────────────────────────────────────────────
 function updatePlayerUI(t) {
   $("player-title").textContent  = t.title  || "—";
   $("player-artist").textContent = t.artist || "";
-  document.title = t.title && t.artist
-    ? `${t.title} – ${t.artist} · Musikarchiv`
-    : "Musikarchiv";
+  startTitleScroll(t.title && t.artist ? `${t.title} – ${t.artist}` : null);
   updateMiniPlayer(t);
   const wrap = $("player-cover-wrap");
   wrap.innerHTML = "";
@@ -1664,72 +1606,68 @@ $("btn-radio").onclick = () => {
   }
 };
 
-// ── Mini-Player ───────────────────────────────────────────
-const miniPlayer = $("mini-player");
-let miniVisible = false;
+// ── Mini-Player Popup ─────────────────────────────────────
+const miniCh = new BroadcastChannel("musikarchiv-player");
+let miniWin = null;
 
-function updateMiniPlayer(t) {
-  if (!t) return;
-  $("mini-title").textContent  = t.title  || "—";
-  $("mini-artist").textContent = t.artist || "";
-  const wrap = $("mini-cover-wrap");
-  wrap.innerHTML = "";
-  wrap.appendChild(makeCover(t, 36));
+function miniIsOpen() {
+  return miniWin && !miniWin.closed;
 }
 
-function syncMiniPlayBtn() {
-  const icon = audio.paused ? "ti-player-play" : "ti-player-pause";
-  $("mini-play-btn").innerHTML = `<i class="ti ${icon}"></i>`;
+function broadcastTrack(t) {
+  if (!miniIsOpen()) return;
+  const key = t ? `${t.artist}||${t.title}` : null;
+  const loved = key ? (lfm.lovedCache.get(key) || false) : false;
+  miniCh.postMessage({ type: "track", track: t, playing: !audio.paused, loved, lfmConnected: lfm.connected });
 }
 
-audio.addEventListener("play",  syncMiniPlayBtn);
-audio.addEventListener("pause", syncMiniPlayBtn);
+function broadcastPlayState() {
+  if (!miniIsOpen()) return;
+  miniCh.postMessage({ type: "playstate", playing: !audio.paused });
+}
+
+function broadcastLoved(loved) {
+  if (!miniIsOpen()) return;
+  miniCh.postMessage({ type: "loved", loved });
+}
+
+function broadcastProgress() {
+  if (!miniIsOpen() || !audio.duration) return;
+  miniCh.postMessage({ type: "progress", pct: (audio.currentTime / audio.duration) * 100, cur: audio.currentTime, dur: audio.duration });
+}
+
+audio.addEventListener("play",  broadcastPlayState);
+audio.addEventListener("pause", broadcastPlayState);
+audio.addEventListener("timeupdate", broadcastProgress);
+
+// Commands from popup
+miniCh.onmessage = e => {
+  const msg = e.data;
+  if (msg.type === "hello") {
+    // Popup just opened — send current state
+    if (state.currentTrack) broadcastTrack(state.currentTrack);
+    else miniCh.postMessage({ type: "playstate", playing: false });
+    miniCh.postMessage({ type: "lfm", connected: lfm.connected });
+    return;
+  }
+  if (msg.type === "popup-closed") { miniWin = null; return; }
+  if (msg.type !== "cmd") return;
+  if (msg.cmd === "toggle")  audio.paused ? audio.play() : audio.pause();
+  if (msg.cmd === "next")    $("btn-next").click();
+  if (msg.cmd === "prev")    $("btn-prev").click();
+  if (msg.cmd === "love")    lfmToggleLove(state.currentTrack, $("player-love"));
+  if (msg.cmd === "seek" && audio.duration) audio.currentTime = (msg.value / 100) * audio.duration;
+};
 
 $("btn-miniplayer").onclick = () => {
-  miniVisible = !miniVisible;
-  miniPlayer.classList.toggle("visible", miniVisible);
-  if (miniVisible && state.currentTrack) updateMiniPlayer(state.currentTrack);
+  if (miniIsOpen()) { miniWin.focus(); return; }
+  miniWin = window.open("/miniplayer", "musikarchiv-mini",
+    "width=320,height=200,resizable=no,toolbar=no,menubar=no,location=no,status=no");
 };
 
-$("mini-dock").onclick = () => {
-  miniVisible = false;
-  miniPlayer.classList.remove("visible");
-};
-
-$("mini-play-btn").onclick = () => audio.paused ? audio.play() : audio.pause();
-$("mini-prev").onclick     = () => $("btn-prev").click();
-$("mini-next").onclick     = () => $("btn-next").click();
-
-// Drag logic
-(function() {
-  const el = miniPlayer;
-  const handle = $("mini-drag-handle");
-  let startX, startY, origX, origY;
-
-  handle.addEventListener("mousedown", e => {
-    startX = e.clientX; startY = e.clientY;
-    const r = el.getBoundingClientRect();
-    origX = r.left; origY = r.top;
-    el.style.right = "auto";
-    el.style.bottom = "auto";
-    el.style.left = origX + "px";
-    el.style.top  = origY + "px";
-    e.preventDefault();
-
-    const onMove = e => {
-      const x = Math.min(Math.max(origX + e.clientX - startX, 0), window.innerWidth  - el.offsetWidth);
-      const y = Math.min(Math.max(origY + e.clientY - startY, 0), window.innerHeight - el.offsetHeight);
-      el.style.left = x + "px";
-      el.style.top  = y + "px";
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup",   onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup",   onUp);
-  });
-})();
+function updateMiniPlayer(t) {
+  broadcastTrack(t);
+}
 
 // ── Last.fm ────────────────────────────────────────────────
 const lfm = { connected: false, username: null, lovedCache: new Map() };
@@ -1769,6 +1707,7 @@ async function lfmDisconnect() {
   await fetch(`${API}/api/lastfm/disconnect`, { method: "POST" });
   lfm.connected = false; lfm.username = null;
   lfm.lovedCache.clear();
+  miniCh.postMessage({ type: "lfm", connected: false, loved: false });
   renderLfmStatus();
   renderTracks();
 }
@@ -1808,6 +1747,7 @@ async function lfmToggleLove(track, btn) {
     });
     lfm.lovedCache.set(key, !isLoved);
     applyLovedState(btn, !isLoved);
+    broadcastLoved(!isLoved);
     // update all matching heart buttons in track list
     document.querySelectorAll(`.btn-love[data-key="${CSS.escape(key)}"]`).forEach(b => applyLovedState(b, !isLoved));
   } catch (e) { console.error("Last.fm love failed", e); }
