@@ -1,4 +1,4 @@
-# Musikarchiv – Design Specification
+# Adolar – Design Specification
 
 > Diese Datei beschreibt das abgestimmte UI exakt. Claude Code soll dieses Design 1:1 umsetzen.
 
@@ -72,7 +72,7 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-
 ```
 Höhe: 52px | bg: --bg-primary | border-bottom: 0.5px solid --border-subtle
 Padding: 0 20px
-Links:  Logo-Icon (🎵 oder ti-music, 20px, Farbe --accent) + Text "Musikarchiv" (15px, weight 500)
+Links:  Logo-Icon (🎵 oder ti-music, 20px, Farbe --accent) + Text "Adolar" (15px, weight 500)
 Rechts: Meta-Info "X Tracks · Y GB · Zuletzt gescannt: heute" (12px, --text-tertiary)
 ```
 

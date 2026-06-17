@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Musikarchiv</title>
+  <title>Adolar</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     :root {
@@ -134,7 +134,7 @@
 </div>
 
 <script>
-const ch = new BroadcastChannel("musikarchiv-player");
+const ch = new BroadcastChannel("adolar-player");
 let currentTrack = null;
 let lfmConnected = false;
 
@@ -163,7 +163,7 @@ function setTrack(track, playing, loved) {
 
   document.getElementById("track-title").textContent  = track.title  || "—";
   document.getElementById("track-artist").textContent = track.artist || "";
-  document.title = track.title ? `${track.title} – ${track.artist || ""}` : "Musikarchiv";
+  document.title = track.title ? `${track.title} – ${track.artist || ""}` : "Adolar";
 
   const inner = document.getElementById("cover-inner");
   inner.innerHTML = "";
