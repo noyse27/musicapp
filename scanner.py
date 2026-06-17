@@ -171,11 +171,13 @@ def run_scan(music_root: str):
             # Load existing mtimes once — avoids per-file DB round-trips
             from db import get_connection
             conn = get_connection()
-            existing_mtimes = {
-                row["path"]: row["mtime"]
-                for row in conn.execute("SELECT path, mtime FROM tracks").fetchall()
-            }
-            conn.close()
+            try:
+                existing_mtimes = {
+                    row["path"]: row["mtime"]
+                    for row in conn.execute("SELECT path, mtime FROM tracks").fetchall()
+                }
+            finally:
+                conn.close()
 
             files = list(_collect_mp3s(music_root))
             _update(total=len(files))

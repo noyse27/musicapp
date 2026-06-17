@@ -1465,13 +1465,15 @@ async function startRadio() {
   if (!initial.length) { stopRadio(); return; }
 
   radio.queue   = initial;
+  radio.session = (radio.session || 0) + 1; // session token prevents stale fills
   state.tracks  = [...radio.queue];
   $("result-count").textContent = `Radio – …`;
   playTrack(0);
 
-  // Background fill to 25
+  // Background fill to 25 — guarded by session token
+  const mySession = radio.session;
   loadRadioQueue(20, initial.map(t => t.id)).then(more => {
-    if (!radio.active) return;
+    if (!radio.active || radio.session !== mySession) return;
     radio.queue.push(...more);
     state.tracks = [...radio.queue];
     $("result-count").textContent = `Radio – ${radio.queue.length} Tracks`;
@@ -1522,12 +1524,20 @@ function preloadNext(nextTrackId) {
 
 function startCrossfade() {
   if (radio.cfActive) return;
+  // Wait until audioB has enough data to play without interruption
+  if (audioB.readyState < 3) { // HAVE_FUTURE_DATA = 3
+    audioB.addEventListener("canplay", startCrossfade, { once: true });
+    return;
+  }
   radio.cfActive = true;
   const vol = parseFloat($("volume").value) || 0.8;
 
-  // audioB is already buffered from preloadNext — just play it
   audioB.volume = 0;
-  audioB.play();
+  audioB.play().catch(() => {
+    // Autoplay blocked or src invalid — fall back to direct next
+    radio.cfActive = false;
+    radioNext().then(() => { if (radio.queue.length) playTrack(0); });
+  });
 
   const startTime = performance.now();
   const tick = () => {
@@ -1707,8 +1717,10 @@ $("mini-next").onclick     = () => $("btn-next").click();
     e.preventDefault();
 
     const onMove = e => {
-      el.style.left = (origX + e.clientX - startX) + "px";
-      el.style.top  = (origY + e.clientY - startY) + "px";
+      const x = Math.min(Math.max(origX + e.clientX - startX, 0), window.innerWidth  - el.offsetWidth);
+      const y = Math.min(Math.max(origY + e.clientY - startY, 0), window.innerHeight - el.offsetHeight);
+      el.style.left = x + "px";
+      el.style.top  = y + "px";
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
