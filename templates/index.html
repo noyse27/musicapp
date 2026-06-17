@@ -1305,6 +1305,11 @@ function updatePlayerUI(t) {
   }
   if (lfm.connected) {
     lfmCheckLoved(t).then(loved => applyLovedState($("player-love"), loved));
+    fetch(`${API}/api/lastfm/nowplaying`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artist: t.artist, title: t.title, duration: t.duration }),
+    }).catch(() => {});
   }
 }
 

@@ -45,6 +45,14 @@ def get_session(token: str) -> dict:
     return data.get("session", {})
 
 
+def now_playing(session_key: str, artist: str, title: str, duration: int = None) -> dict:
+    params = {"method": "track.updateNowPlaying", "sk": session_key,
+              "artist": artist, "track": title}
+    if duration:
+        params["duration"] = duration
+    return _post(params)
+
+
 def scrobble(session_key: str, artist: str, title: str, timestamp: int = None) -> dict:
     if timestamp is None:
         timestamp = int(time.time())

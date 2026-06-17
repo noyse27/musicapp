@@ -352,6 +352,23 @@ def api_lastfm_disconnect():
     return jsonify({"ok": True})
 
 
+@app.post("/api/lastfm/nowplaying")
+def api_lastfm_nowplaying():
+    sk = db.get_setting("lastfm_session_key")
+    if not sk:
+        return jsonify({"error": "not connected"}), 401
+    body   = request.json or {}
+    artist = body.get("artist", "")
+    title  = body.get("title", "")
+    if not artist or not title:
+        return jsonify({"error": "missing artist/title"}), 400
+    try:
+        lastfm.now_playing(sk, artist, title, duration=body.get("duration"))
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.post("/api/lastfm/scrobble")
 def api_lastfm_scrobble():
     sk = db.get_setting("lastfm_session_key")
