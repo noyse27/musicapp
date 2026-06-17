@@ -25,27 +25,7 @@ A self-hosted music archive web app for Synology NAS (or any Docker host). Brows
 
 ## Screenshot
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Adolar          Last.fm: user   Mini  🛒              │
-├──────────┬──────────────────────────────────────────────────┤
-│ Interpret│  🔍 Search...                      Sortieren ▾   │
-│ Genre    ├──────────────────────────────────────────────────┤
-│ Jahrzehnt│  12.450 Tracks                          ☰  ⊞    │
-│ Länge    ├──────────────────────────────────────────────────┤
-│ Format   │  ▶  Track title               MP3  3:45  ♡  ⬇  │
-│ Bitrate  │  ▶  Track title               MP3  5:12  ♡  ⬇  │
-│          │  ...                                             │
-├──────────┴──────────────────────────────────────────────────┤
-│  ⏮  ▶  ⏭   ──────────────────────  0:42 / 3:45  🔊  ♡   │
-└─────────────────────────────────────────────────────────────┘
-
-                              ┌──────────────────┐
-                              │ ≡ Track title  ✕ │  ← Mini-player
-                              │   Artist name    │     (floating,
-                              │  ⏮   ▶   ⏭    │      draggable)
-                              └──────────────────┘
-```
+![Adolar](docs/screenshot.png)
 
 ## Requirements
 
