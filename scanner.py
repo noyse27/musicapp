@@ -165,13 +165,32 @@ def run_scan(music_root: str):
         return
 
     def _worker():
-        _update(running=True, progress=0, total=0, errors=0,
+        _update(running=True, progress=0, total=0, errors=0, skipped=0,
                 started_at=time.time(), finished_at=None, current_file="")
         try:
+            # Load existing mtimes once — avoids per-file DB round-trips
+            from db import get_connection
+            conn = get_connection()
+            existing_mtimes = {
+                row["path"]: row["mtime"]
+                for row in conn.execute("SELECT path, mtime FROM tracks").fetchall()
+            }
+            conn.close()
+
             files = list(_collect_mp3s(music_root))
             _update(total=len(files))
+            skipped = 0
             for i, path in enumerate(files):
                 _update(current_file=path, progress=i + 1)
+                try:
+                    mtime = os.stat(path).st_mtime
+                except OSError:
+                    continue
+                # Skip unchanged files
+                if path in existing_mtimes and abs(existing_mtimes[path] - mtime) < 1.0:
+                    skipped += 1
+                    _update(skipped=skipped)
+                    continue
                 data = _scan_file(path)
                 if data:
                     upsert_track(data)

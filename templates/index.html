@@ -298,7 +298,6 @@
     }
     .btn-love:hover { color: #e03e3e; transform: scale(1.15); }
     .btn-love.loved { color: #e03e3e; }
-    .btn-love.loved i::before { content: "\ea29"; } /* ti-heart-filled */
     #player-love {
       font-size: 20px;
       padding: 6px;
@@ -705,6 +704,90 @@
 
     audio { display: none; }
 
+    /* ── Mini-Player ─────────────────────────────────── */
+    #mini-player {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      width: 280px;
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border-subtle);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.45);
+      padding: 12px 14px;
+      gap: 10px;
+      flex-direction: column;
+      user-select: none;
+    }
+    #mini-player.visible { display: flex; }
+    #mini-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #mini-cover-wrap {
+      width: 36px; height: 36px;
+      border-radius: 6px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    #mini-cover-wrap img, #mini-cover-wrap .cover-placeholder {
+      width: 100%; height: 100%; object-fit: cover; border-radius: 6px;
+    }
+    #mini-cover-wrap .cover-placeholder {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: #fff;
+      background: var(--accent-deep);
+    }
+    #mini-info { flex: 1; min-width: 0; }
+    #mini-title {
+      font-size: var(--text-sm); font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #mini-artist {
+      font-size: var(--text-xs); color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #mini-dock {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-tertiary); font-size: 14px; padding: 2px;
+      flex-shrink: 0;
+    }
+    #mini-dock:hover { color: var(--text-primary); }
+    #mini-controls {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+    }
+    .mini-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-secondary); padding: 4px; border-radius: 4px;
+      transition: color .1s;
+    }
+    .mini-btn:hover { color: var(--text-primary); }
+    .mini-btn i { font-size: 18px; }
+    #mini-play-btn i { font-size: 22px; color: var(--text-primary); }
+    #mini-drag-handle {
+      position: absolute; top: 0; left: 0; right: 44px; height: 20px;
+      cursor: grab;
+    }
+    #mini-drag-handle:active { cursor: grabbing; }
+    #btn-miniplayer {
+      background: none;
+      border: 0.5px solid var(--border-subtle);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: var(--text-sm);
+      padding: 5px 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    #btn-miniplayer:hover { background: var(--bg-secondary); }
+
     /* ── Empty state ──────────────────────────────────── */
     .empty-state {
       display: flex;
@@ -729,6 +812,9 @@
   </div>
   <div id="topbar-meta">Lade…</div>
   <div id="lastfm-status" style="flex-shrink:0;display:flex;align-items:center;gap:8px;font-size:var(--text-sm);color:var(--text-tertiary)"></div>
+  <button id="btn-miniplayer" title="Mini-Player abdocken">
+    <i class="ti ti-player-eject" style="font-size:14px"></i> Mini
+  </button>
   <div style="position:relative;flex-shrink:0">
     <button id="btn-basket" title="Download-Korb">
       <i class="ti ti-shopping-cart-down" style="font-size:17px"></i>
@@ -941,6 +1027,26 @@
 <audio id="audio"></audio>
 <audio id="audio-b"></audio>
 
+<!-- ── Mini-Player ── -->
+<div id="mini-player">
+  <div id="mini-drag-handle"></div>
+  <div id="mini-header">
+    <div id="mini-cover-wrap">
+      <div class="cover-placeholder" style="background:var(--accent-deep)"></div>
+    </div>
+    <div id="mini-info">
+      <div id="mini-title">—</div>
+      <div id="mini-artist"></div>
+    </div>
+    <button id="mini-dock" title="Andocken"><i class="ti ti-player-eject" style="transform:rotate(180deg)"></i></button>
+  </div>
+  <div id="mini-controls">
+    <button class="mini-btn" id="mini-prev"><i class="ti ti-player-skip-back"></i></button>
+    <button class="mini-btn" id="mini-play-btn"><i class="ti ti-player-play"></i></button>
+    <button class="mini-btn" id="mini-next"><i class="ti ti-player-skip-forward"></i></button>
+  </div>
+</div>
+
 <script>
 const API = "";
 const $ = id => document.getElementById(id);
@@ -1078,7 +1184,9 @@ const progress   = $("progress");
 
 // ── Radio state ───────────────────────────────────────────
 const radio = { active: false, queue: [], playedIds: [], cfTimer: null, cfActive: false };
-const CF_OUT = 15, CF_IN = 10; // crossfade seconds
+const CF_PRELOAD = 25; // seconds before end: start buffering next track
+const CF_OUT     = 12; // seconds before end: start fade-out
+const CF_IN      =  8; // fade-in duration
 
 // ── Helpers ───────────────────────────────────────────────
 function fmt(sec) {
@@ -1103,6 +1211,14 @@ function artistColor(name) {
   return `hsl(${h % 360}, 55%, 40%)`;
 }
 
+function makePlaceholder(track, size) {
+  const div = document.createElement("div");
+  div.className = "track-cover-placeholder";
+  div.style.cssText = `width:${size}px;height:${size}px;background:${artistColor(track.artist)}`;
+  div.textContent = initials(track.artist);
+  return div;
+}
+
 function makeCover(track, size = 42) {
   if (track.has_cover) {
     const img = document.createElement("img");
@@ -1110,13 +1226,10 @@ function makeCover(track, size = 42) {
     img.src = `${API}/api/cover/${track.cover_hash}`;
     img.loading = "lazy";
     img.width = size; img.height = size;
+    img.onerror = () => img.replaceWith(makePlaceholder(track, size));
     return img;
   }
-  const div = document.createElement("div");
-  div.className = "track-cover-placeholder";
-  div.style.cssText = `width:${size}px;height:${size}px;background:${artistColor(track.artist)}`;
-  div.textContent = initials(track.artist);
-  return div;
+  return makePlaceholder(track, size);
 }
 
 // ── Fetch ─────────────────────────────────────────────────
@@ -1290,6 +1403,10 @@ function renderPagination() {
 function updatePlayerUI(t) {
   $("player-title").textContent  = t.title  || "—";
   $("player-artist").textContent = t.artist || "";
+  document.title = t.title && t.artist
+    ? `${t.title} – ${t.artist} · Musikarchiv`
+    : "Musikarchiv";
+  updateMiniPlayer(t);
   const wrap = $("player-cover-wrap");
   wrap.innerHTML = "";
   if (t.has_cover) {
@@ -1343,13 +1460,23 @@ async function startRadio() {
   radio.playedIds = [];
   $("btn-radio").classList.add("active");
 
-  const tracks = await loadRadioQueue(25);
-  if (!tracks.length) { stopRadio(); return; }
+  // Fetch 5 tracks first → play immediately, then fetch remaining in background
+  const initial = await loadRadioQueue(5);
+  if (!initial.length) { stopRadio(); return; }
 
-  radio.queue = tracks;
-  state.tracks = [...radio.queue];
-  $("result-count").textContent = `Radio – ${radio.queue.length} Tracks`;
+  radio.queue   = initial;
+  state.tracks  = [...radio.queue];
+  $("result-count").textContent = `Radio – …`;
   playTrack(0);
+
+  // Background fill to 25
+  loadRadioQueue(20, initial.map(t => t.id)).then(more => {
+    if (!radio.active) return;
+    radio.queue.push(...more);
+    state.tracks = [...radio.queue];
+    $("result-count").textContent = `Radio – ${radio.queue.length} Tracks`;
+    renderTracks();
+  });
 }
 
 function stopRadio() {
@@ -1384,28 +1511,36 @@ async function radioNext() {
   $("result-count").textContent = `Radio – ${radio.queue.length} Tracks`;
 }
 
-function startCrossfade(nextTrackId) {
+function preloadNext(nextTrackId) {
+  // Buffer the next track silently so it's ready when crossfade starts
+  if (audioB.getAttribute("src")) return; // already preloading
+  audioB.src = `${API}/api/stream/${nextTrackId}`;
+  audioB.volume = 0;
+  audioB.preload = "auto";
+  audioB.load();
+}
+
+function startCrossfade() {
+  if (radio.cfActive) return;
   radio.cfActive = true;
   const vol = parseFloat($("volume").value) || 0.8;
-  audioB.src = `${API}/api/stream/${nextTrackId}`;
+
+  // audioB is already buffered from preloadNext — just play it
   audioB.volume = 0;
   audioB.play();
 
   const startTime = performance.now();
   const tick = () => {
     const elapsed = (performance.now() - startTime) / 1000;
-    // Fade out: 0→CF_OUT seconds
-    const fadeOutPct = Math.min(elapsed / CF_OUT, 1);
-    audio.volume = vol * (1 - fadeOutPct);
-    // Fade in: starts after CF_OUT - CF_IN = 5s
-    const fadeInElapsed = elapsed - (CF_OUT - CF_IN);
-    const fadeInPct = fadeInElapsed > 0 ? Math.min(fadeInElapsed / CF_IN, 1) : 0;
-    audioB.volume = vol * fadeInPct;
+    const t_out = Math.min(elapsed / CF_OUT, 1);
+    const t_in  = Math.min(Math.max(elapsed - (CF_OUT - CF_IN), 0) / CF_IN, 1);
+    // Equal-power curve: constant perceived loudness
+    audio.volume  = vol * Math.cos(t_out * Math.PI / 2);
+    audioB.volume = vol * Math.sin(t_in  * Math.PI / 2);
 
     if (elapsed < CF_OUT) {
       radio.cfTimer = setTimeout(tick, 50);
     } else {
-      // Crossfade done — hand off audioB playback to audio, advance queue
       const nextSrc  = audioB.src;
       const nextTime = audioB.currentTime;
       audioB.pause(); audioB.removeAttribute("src"); audioB.load();
@@ -1470,10 +1605,15 @@ audio.ontimeupdate = () => {
     }
   }
 
-  // Trigger crossfade when CF_OUT seconds remain
-  if (radio.active && !radio.cfActive && audio.duration - audio.currentTime <= CF_OUT) {
+  if (radio.active) {
+    const remaining = audio.duration - audio.currentTime;
     const next = radio.queue[1];
-    if (next) startCrossfade(next.id);
+    if (next) {
+      // Preload next track early so it's buffered before crossfade
+      if (!radio.cfActive && remaining <= CF_PRELOAD) preloadNext(next.id);
+      // Start crossfade
+      if (!radio.cfActive && remaining <= CF_OUT) startCrossfade();
+    }
   }
 };
 
@@ -1495,6 +1635,7 @@ $("btn-next").onclick = () => {
     clearTimeout(radio.cfTimer);
     radio.cfActive = false;
     audioB.pause(); audioB.removeAttribute("src"); audioB.load();
+    audio.volume = parseFloat($("volume").value) || 0.8;
     radioNext().then(() => {
       if (radio.queue.length) playTrack(0);
     });
@@ -1512,6 +1653,71 @@ $("btn-radio").onclick = () => {
     startRadio();
   }
 };
+
+// ── Mini-Player ───────────────────────────────────────────
+const miniPlayer = $("mini-player");
+let miniVisible = false;
+
+function updateMiniPlayer(t) {
+  if (!t) return;
+  $("mini-title").textContent  = t.title  || "—";
+  $("mini-artist").textContent = t.artist || "";
+  const wrap = $("mini-cover-wrap");
+  wrap.innerHTML = "";
+  wrap.appendChild(makeCover(t, 36));
+}
+
+function syncMiniPlayBtn() {
+  const icon = audio.paused ? "ti-player-play" : "ti-player-pause";
+  $("mini-play-btn").innerHTML = `<i class="ti ${icon}"></i>`;
+}
+
+audio.addEventListener("play",  syncMiniPlayBtn);
+audio.addEventListener("pause", syncMiniPlayBtn);
+
+$("btn-miniplayer").onclick = () => {
+  miniVisible = !miniVisible;
+  miniPlayer.classList.toggle("visible", miniVisible);
+  if (miniVisible && state.currentTrack) updateMiniPlayer(state.currentTrack);
+};
+
+$("mini-dock").onclick = () => {
+  miniVisible = false;
+  miniPlayer.classList.remove("visible");
+};
+
+$("mini-play-btn").onclick = () => audio.paused ? audio.play() : audio.pause();
+$("mini-prev").onclick     = () => $("btn-prev").click();
+$("mini-next").onclick     = () => $("btn-next").click();
+
+// Drag logic
+(function() {
+  const el = miniPlayer;
+  const handle = $("mini-drag-handle");
+  let startX, startY, origX, origY;
+
+  handle.addEventListener("mousedown", e => {
+    startX = e.clientX; startY = e.clientY;
+    const r = el.getBoundingClientRect();
+    origX = r.left; origY = r.top;
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+    el.style.left = origX + "px";
+    el.style.top  = origY + "px";
+    e.preventDefault();
+
+    const onMove = e => {
+      el.style.left = (origX + e.clientX - startX) + "px";
+      el.style.top  = (origY + e.clientY - startY) + "px";
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup",   onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup",   onUp);
+  });
+})();
 
 // ── Last.fm ────────────────────────────────────────────────
 const lfm = { connected: false, username: null, lovedCache: new Map() };
