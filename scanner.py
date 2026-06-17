@@ -118,6 +118,20 @@ def _scan_file(path: str) -> dict | None:
         duration = int(getattr(info, "length", 0))
         bitrate = int(getattr(info, "bitrate", 0) / 1000) if hasattr(info, "bitrate") else 0
 
+        # Read existing play count from tag
+        play_count = 0
+        try:
+            pcnt = tags.get("PCNT")                          # MP3 ID3
+            if pcnt is not None:
+                play_count = int(pcnt.count)
+            else:
+                raw = (tags.get("play_count")                # FLAC Vorbis
+                       or tags.get("----:com.apple.iTunes:play_count"))  # M4A
+                if raw:
+                    play_count = int(str(raw[0]).strip())
+        except Exception:
+            pass
+
         return {
             "path": path,
             "title": pick("title", "TIT2"),
@@ -131,6 +145,7 @@ def _scan_file(path: str) -> dict | None:
             "size": stat.st_size,
             "cover_hash": cover_hash,
             "mtime": stat.st_mtime,
+            "play_count": play_count,
         }
     except Exception as e:
         log.warning("Failed to scan %s: %s", path, e)

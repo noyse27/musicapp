@@ -1313,7 +1313,8 @@ function playTrack(idx) {
   if (!t) return;
   state.currentIdx   = idx;
   state.currentTrack = t;
-  _scrobbled = false;
+  _scrobbled   = false;
+  _playCounted = false;
 
   updatePlayerUI(t);
   audio.src = `${API}/api/stream/${t.id}`;
@@ -1441,6 +1442,7 @@ audio.onended = async () => {
 };
 
 let _scrobbled = false;
+let _playCounted = false;
 audio.ontimeupdate = () => {
   if (!audio.duration) return;
   progress.value = (audio.currentTime / audio.duration) * 100;
@@ -1451,6 +1453,15 @@ audio.ontimeupdate = () => {
   if (!_scrobbled && audio.currentTime >= 30 && audio.currentTime / audio.duration >= 0.5) {
     _scrobbled = true;
     lfmScrobble(state.currentTrack);
+  }
+
+  // Increment play count tag at 90% played
+  if (!_playCounted && audio.currentTime / audio.duration >= 0.9) {
+    _playCounted = true;
+    if (state.currentTrack) {
+      fetch(`${API}/api/track/${state.currentTrack.id}/played`, { method: "POST" })
+        .catch(() => {});
+    }
   }
 
   // Trigger crossfade when CF_OUT seconds remain

@@ -234,6 +234,71 @@ def api_download():
                      as_attachment=True, download_name=filename)
 
 
+# ── Play count ───────────────────────────────────────────────────────────────
+
+@app.post("/api/track/<int:track_id>/played")
+def api_track_played(track_id):
+    new_count, raw_path = db.increment_play_count(track_id)
+    if raw_path is None:
+        abort(404)
+
+    path = _safe_path(raw_path)
+    if path and os.path.isfile(path):
+        # Read current tag value and take MAX to protect against external changes
+        tag_count  = _read_play_count_tag(path)
+        new_count  = max(tag_count, new_count - 1) + 1  # MAX(tag, db_before) + 1
+        db.set_play_count(track_id, new_count)
+        _write_play_count_tag(path, new_count)
+
+    return jsonify({"play_count": new_count})
+
+
+def _read_play_count_tag(path: str) -> int:
+    ext = os.path.splitext(path)[1].lower()
+    try:
+        if ext == ".mp3":
+            from mutagen.id3 import ID3
+            tags = ID3(path)
+            pcnt = tags.get("PCNT")
+            return int(pcnt.count) if pcnt else 0
+        elif ext == ".flac":
+            from mutagen.flac import FLAC
+            tags = FLAC(path)
+            raw = tags.get("play_count")
+            return int(raw[0]) if raw else 0
+        elif ext == ".m4a":
+            from mutagen.mp4 import MP4
+            tags = MP4(path)
+            raw = tags.get("----:com.apple.iTunes:play_count")
+            return int(raw[0]) if raw else 0
+    except Exception:
+        pass
+    return 0
+
+
+def _write_play_count_tag(path: str, count: int):
+    ext = os.path.splitext(path)[1].lower()
+    try:
+        if ext == ".mp3":
+            from mutagen.id3 import ID3, PCNT
+            tags = ID3(path)
+            tags["PCNT"] = PCNT(count=count)
+            tags.save(path)
+        elif ext == ".flac":
+            from mutagen.flac import FLAC
+            tags = FLAC(path)
+            tags["play_count"] = [str(count)]
+            tags.save()
+        elif ext == ".m4a":
+            from mutagen.mp4 import MP4
+            tags = MP4(path)
+            tags["----:com.apple.iTunes:play_count"] = [str(count).encode()]
+            tags.save()
+        # ogg/opus/wav: skip — no standard play count field
+    except Exception as e:
+        logging.getLogger(__name__).warning("Could not write play count tag to %s: %s", path, e)
+
+
 # ── Radio / Random ────────────────────────────────────────────────────────────
 
 @app.get("/api/random")

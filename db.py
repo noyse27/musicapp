@@ -88,6 +88,11 @@ def init_db():
                 value TEXT
             );
         """)
+        # Migration: add play_count to existing DBs (safe to run repeatedly)
+        try:
+            conn.execute("ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # column already exists
 
 
 def search_tracks(query="", genre=None, decade=None, fmt=None,
@@ -255,18 +260,20 @@ def get_scanner_status():
 
 
 def upsert_track(data: dict):
+    data.setdefault("play_count", 0)
     with db() as conn:
         conn.execute("""
             INSERT INTO tracks (path, title, artist, album, genre, year, track_no,
-                                duration, bitrate, size, cover_hash, mtime)
+                                duration, bitrate, size, cover_hash, mtime, play_count)
             VALUES (:path, :title, :artist, :album, :genre, :year, :track_no,
-                    :duration, :bitrate, :size, :cover_hash, :mtime)
+                    :duration, :bitrate, :size, :cover_hash, :mtime, :play_count)
             ON CONFLICT(path) DO UPDATE SET
                 title=excluded.title, artist=excluded.artist, album=excluded.album,
                 genre=excluded.genre, year=excluded.year, track_no=excluded.track_no,
                 duration=excluded.duration, bitrate=excluded.bitrate, size=excluded.size,
                 cover_hash=excluded.cover_hash, mtime=excluded.mtime,
-                indexed_at=unixepoch()
+                indexed_at=unixepoch(),
+                play_count=MAX(play_count, excluded.play_count)
         """, data)
 
 
@@ -275,6 +282,25 @@ def save_cover(hash_: str, data: bytes, mime: str = "image/jpeg"):
         conn.execute(
             "INSERT OR IGNORE INTO covers (hash, data, mime) VALUES (?, ?, ?)",
             (hash_, data, mime),
+        )
+
+
+def increment_play_count(track_id: int):
+    """Increments play_count by 1 in DB, returns (new_count, path)."""
+    with db() as conn:
+        conn.execute(
+            "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?", (track_id,)
+        )
+        row = conn.execute(
+            "SELECT play_count, path FROM tracks WHERE id = ?", (track_id,)
+        ).fetchone()
+    return (row["play_count"], row["path"]) if row else (0, None)
+
+
+def set_play_count(track_id: int, count: int):
+    with db() as conn:
+        conn.execute(
+            "UPDATE tracks SET play_count = ? WHERE id = ?", (count, track_id)
         )
 
 
