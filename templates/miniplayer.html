@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Musikarchiv</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    :root {
+      --accent:        #7F77DD;
+      --accent-light:  color-mix(in srgb, #7F77DD 18%, #30302E);
+      --accent-border: #AFA9EC;
+      --bg-primary:    #30302E;
+      --bg-secondary:  #3A3A38;
+      --text-primary:  #ECECEC;
+      --text-secondary:#9A9A96;
+      --text-tertiary: #5C5C58;
+      --border-subtle: #3E3E3C;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #cover-wrap {
+      width: 100%;
+      height: 120px;
+      overflow: hidden;
+      flex-shrink: 0;
+      position: relative;
+    }
+    #cover-wrap img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .cover-ph {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; font-weight: 700; color: #fff;
+      background: #534AB7;
+    }
+    #overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 40%, rgba(30,30,28,.85) 100%);
+    }
+    #track-info {
+      position: absolute; bottom: 8px; left: 10px; right: 10px;
+    }
+    #track-title {
+      font-size: 13px; font-weight: 600;
+      color: #fff;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #track-artist {
+      font-size: 11px; color: rgba(255,255,255,.7);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    #controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      gap: 6px;
+      border-top: 0.5px solid var(--border-subtle);
+    }
+
+    .ctrl {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-secondary); padding: 6px;
+      border-radius: 6px; transition: color .1s, background .1s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ctrl:hover { color: var(--text-primary); background: var(--bg-secondary); }
+    .ctrl i { font-size: 18px; }
+    #btn-play i { font-size: 24px; color: var(--text-primary); }
+
+    #btn-love { color: var(--text-tertiary); }
+    #btn-love:hover { color: #e03e3e; }
+    #btn-love.loved { color: #e03e3e; }
+
+    #progress-wrap {
+      padding: 0 10px 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .time { font-size: 10px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    #progress {
+      flex: 1; accent-color: var(--accent); cursor: pointer; height: 3px;
+    }
+
+    #not-playing {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: var(--text-tertiary);
+      flex-direction: column; gap: 8px;
+    }
+    #not-playing i { font-size: 32px; }
+  </style>
+</head>
+<body>
+
+<div id="cover-wrap" style="display:none">
+  <div id="cover-inner"></div>
+  <div id="overlay"></div>
+  <div id="track-info">
+    <div id="track-title">—</div>
+    <div id="track-artist"></div>
+  </div>
+</div>
+
+<div id="not-playing">
+  <i class="ti ti-music"></i>
+  Nichts spielt gerade
+</div>
+
+<div id="progress-wrap" style="display:none">
+  <span class="time" id="time-cur">0:00</span>
+  <input type="range" id="progress" min="0" max="100" value="0" step="0.1">
+  <span class="time" id="time-dur">0:00</span>
+</div>
+
+<div id="controls">
+  <button class="ctrl" id="btn-prev" title="Zurück"><i class="ti ti-player-skip-back"></i></button>
+  <button class="ctrl" id="btn-play" title="Play/Pause"><i class="ti ti-player-play"></i></button>
+  <button class="ctrl" id="btn-next" title="Weiter"><i class="ti ti-player-skip-forward"></i></button>
+  <button class="ctrl" id="btn-love" title="Bei Last.fm liken"><i class="ti ti-heart"></i></button>
+</div>
+
+<script>
+const ch = new BroadcastChannel("musikarchiv-player");
+let currentTrack = null;
+let lfmConnected = false;
+
+function fmt(s) {
+  if (!s || isNaN(s)) return "0:00";
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function initials(name) {
+  if (!name) return "♪";
+  return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join("");
+}
+
+function artistColor(name) {
+  let h = 0;
+  for (const c of (name || "?")) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return `hsl(${h % 360}, 55%, 40%)`;
+}
+
+function setTrack(track, playing, loved) {
+  currentTrack = track;
+  document.getElementById("not-playing").style.display = "none";
+  document.getElementById("cover-wrap").style.display = "";
+  document.getElementById("progress-wrap").style.display = "";
+
+  document.getElementById("track-title").textContent  = track.title  || "—";
+  document.getElementById("track-artist").textContent = track.artist || "";
+  document.title = track.title ? `${track.title} – ${track.artist || ""}` : "Musikarchiv";
+
+  const inner = document.getElementById("cover-inner");
+  inner.innerHTML = "";
+  if (track.has_cover) {
+    const img = document.createElement("img");
+    img.src = `/api/cover/${track.cover_hash}`;
+    img.onerror = () => { inner.innerHTML = ""; inner.appendChild(makePh(track)); };
+    inner.appendChild(img);
+  } else {
+    inner.appendChild(makePh(track));
+  }
+
+  setPlaying(playing);
+  setLoved(loved);
+}
+
+function makePh(track) {
+  const div = document.createElement("div");
+  div.className = "cover-ph";
+  div.style.background = artistColor(track.artist);
+  div.textContent = initials(track.artist);
+  return div;
+}
+
+function setPlaying(playing) {
+  document.getElementById("btn-play").innerHTML = playing
+    ? `<i class="ti ti-player-pause"></i>`
+    : `<i class="ti ti-player-play"></i>`;
+}
+
+function setLoved(loved) {
+  const btn = document.getElementById("btn-love");
+  btn.classList.toggle("loved", loved);
+  btn.title = loved ? "Nicht mehr mögen (Last.fm)" : "Bei Last.fm liken";
+  btn.innerHTML = loved
+    ? `<i class="ti ti-heart-filled"></i>`
+    : `<i class="ti ti-heart"></i>`;
+  btn.style.display = lfmConnected ? "" : "none";
+}
+
+// Receive messages from main window
+ch.onmessage = e => {
+  const msg = e.data;
+  if (msg.type === "track")     { lfmConnected = msg.lfmConnected; setTrack(msg.track, msg.playing, msg.loved); }
+  if (msg.type === "playstate") setPlaying(msg.playing);
+  if (msg.type === "loved")     setLoved(msg.loved);
+  if (msg.type === "progress") {
+    document.getElementById("progress").value = msg.pct;
+    document.getElementById("time-cur").textContent = fmt(msg.cur);
+    document.getElementById("time-dur").textContent = fmt(msg.dur);
+  }
+  if (msg.type === "lfm")       { lfmConnected = msg.connected; if (currentTrack) setLoved(msg.loved || false); }
+};
+
+// Send commands to main window
+document.getElementById("btn-prev").onclick  = () => ch.postMessage({ type: "cmd", cmd: "prev" });
+document.getElementById("btn-next").onclick  = () => ch.postMessage({ type: "cmd", cmd: "next" });
+document.getElementById("btn-play").onclick  = () => ch.postMessage({ type: "cmd", cmd: "toggle" });
+document.getElementById("btn-love").onclick  = () => ch.postMessage({ type: "cmd", cmd: "love" });
+document.getElementById("progress").oninput  = e => ch.postMessage({ type: "cmd", cmd: "seek", value: e.target.value });
+
+// Ask main window for current state on load
+ch.postMessage({ type: "hello" });
+window.addEventListener("beforeunload", () => ch.postMessage({ type: "popup-closed" }));
+</script>
+</body>
+</html>
