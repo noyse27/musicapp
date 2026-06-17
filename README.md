@@ -26,25 +26,7 @@ A self-hosted music archive web app for Synology NAS (or any Docker host). Brows
 ## Screenshot
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Adolar          Last.fm: user   Mini  🛒              │
-├──────────┬──────────────────────────────────────────────────┤
-│ Interpret│  🔍 Search...                      Sortieren ▾   │
-│ Genre    ├──────────────────────────────────────────────────┤
-│ Jahrzehnt│  12.450 Tracks                          ☰  ⊞    │
-│ Länge    ├──────────────────────────────────────────────────┤
-│ Format   │  ▶  Track title               MP3  3:45  ♡  ⬇  │
-│ Bitrate  │  ▶  Track title               MP3  5:12  ♡  ⬇  │
-│          │  ...                                             │
-├──────────┴──────────────────────────────────────────────────┤
-│  ⏮  ▶  ⏭   ──────────────────────  0:42 / 3:45  🔊  ♡   │
-└─────────────────────────────────────────────────────────────┘
-
-                              ┌──────────────────┐
-                              │ ≡ Track title  ✕ │  ← Mini-player
-                              │   Artist name    │     (floating,
-                              │  ⏮   ▶   ⏭    │      draggable)
-                              └──────────────────┘
+https://private-user-images.githubusercontent.com/25564572/609398462-6e3887e6-5a00-4898-a076-768ade5d432e.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODE3MjA1ODEsIm5iZiI6MTc4MTcyMDI4MSwicGF0aCI6Ii8yNTU2NDU3Mi82MDkzOTg0NjItNmUzODg3ZTYtNWEwMC00ODk4LWEwNzYtNzY4YWRlNWQ0MzJlLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA2MTclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwNjE3VDE4MTgwMVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTQwNTU2YzBjNDkxMGJkNjRlMjNkNDk2MjI3NDdiMGU2M2EyNTM4MDc0ZTc3MTE3M2ViY2MyZDE0ZTU1YzVjNzMmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JnJlc3BvbnNlLWNvbnRlbnQtdHlwZT1pbWFnZSUyRnBuZyJ9._bsXsvzsjVv-SlnOa_BuGDn7DmRJwIwN2_hH-nUYJN4
 ```
 
 ## Requirements
