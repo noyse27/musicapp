@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Adolar Radio</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent:        #7F77DD;
+      --accent-light:  color-mix(in srgb, #7F77DD 18%, #30302E);
+      --accent-border: #AFA9EC;
+      --bg-primary:    #30302E;
+      --bg-secondary:  #3A3A38;
+      --bg-tertiary:   #1E1E1C;
+      --text-primary:  #ECECEC;
+      --text-secondary:#9A9A96;
+      --text-tertiary: #5C5C58;
+      --border-subtle: #3E3E3C;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    /* ── Title bar ── */
+    #titlebar {
+      height: 36px;
+      background: var(--bg-primary);
+      border-bottom: 0.5px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    #titlebar img { width: 18px; height: 18px; }
+    #titlebar span {
+      font-family: "Orbitron", sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--accent) 0%, #b8b4f0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #titlebar-sub {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-left: 4px;
+    }
+
+    /* ── Cover ── */
+    #cover-wrap {
+      width: 100%;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    }
+    #cover-wrap img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .cover-ph {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px; font-weight: 700; color: #fff;
+    }
+    #cover-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 40%, rgba(20,20,18,.9) 100%);
+    }
+    #track-info {
+      position: absolute; bottom: 10px; left: 12px; right: 12px;
+    }
+    #track-title {
+      font-size: 15px; font-weight: 600; color: #fff;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #track-artist {
+      font-size: 12px; color: rgba(255,255,255,.7);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    /* ── Status badge ── */
+    #radio-badge {
+      position: absolute; top: 10px; left: 12px;
+      background: var(--accent); color: #fff;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+      padding: 2px 8px; border-radius: 99px;
+      display: none;
+    }
+    #radio-badge.visible { display: block; }
+
+    /* ── Progress ── */
+    #progress-wrap {
+      padding: 8px 12px 4px;
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg-primary);
+    }
+    .time { font-size: 10px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    #progress {
+      flex: 1; accent-color: var(--accent); cursor: pointer; height: 3px;
+    }
+
+    /* ── Controls ── */
+    #controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px 8px;
+      background: var(--bg-primary);
+      border-top: 0.5px solid var(--border-subtle);
+      gap: 4px;
+    }
+
+    .ctrl {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-secondary); padding: 6px;
+      border-radius: 6px; transition: color .1s, background .1s;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-app-region: no-drag;
+    }
+    .ctrl:hover { color: var(--text-primary); background: var(--bg-secondary); }
+    .ctrl i { font-size: 18px; }
+    #btn-play i { font-size: 24px; color: var(--text-primary); }
+
+    #btn-love { color: var(--text-tertiary); }
+    #btn-love:hover { color: #e03e3e; }
+    #btn-love.loved { color: #e03e3e; }
+
+    /* ── Volume ── */
+    #volume-wrap {
+      display: flex; align-items: center; gap: 5px;
+      -webkit-app-region: no-drag;
+    }
+    #volume-wrap i { font-size: 14px; color: var(--text-tertiary); }
+    #volume { width: 64px; accent-color: var(--accent); cursor: pointer; height: 3px; }
+
+    /* ── Not playing ── */
+    #not-playing {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: var(--text-tertiary);
+      flex-direction: column; gap: 8px;
+    }
+    #not-playing i { font-size: 32px; }
+
+    /* ── Loading spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinning { animation: spin 1s linear infinite; display: inline-block; }
+
+    input[type=range] { -webkit-app-region: no-drag; }
+    button { -webkit-app-region: no-drag; }
+  </style>
+</head>
+<body>
+
+<div id="titlebar">
+  <img src="/static/logo.svg" alt="Adolar">
+  <span>Adolar</span>
+  <span id="titlebar-sub">Radio</span>
+  <button id="btn-settings" title="Einstellungen" onclick="openSettings()" style="
+    margin-left:auto; background:none; border:none; cursor:pointer;
+    color:#5C5C58; padding:4px; border-radius:4px;
+    display:flex; align-items:center; -webkit-app-region:no-drag;
+    transition:color .15s;">
+    <i class="ti ti-settings" style="font-size:15px"></i>
+  </button>
+</div>
+
+<div id="cover-wrap">
+  <div id="cover-inner"></div>
+  <div id="cover-overlay"></div>
+  <div id="radio-badge" class="visible">● RADIO</div>
+  <div id="track-info" style="display:none">
+    <div id="track-title">—</div>
+    <div id="track-artist"></div>
+  </div>
+  <div id="not-playing">
+    <i class="ti ti-radio spinning"></i>
+    Starte Radio…
+  </div>
+</div>
+
+<div id="progress-wrap" style="display:none">
+  <span class="time" id="time-cur">0:00</span>
+  <input type="range" id="progress" min="0" max="100" value="0" step="0.1">
+  <span class="time" id="time-dur">0:00</span>
+</div>
+
+<div id="controls">
+  <button class="ctrl" id="btn-prev" title="Vorheriger Titel"><i class="ti ti-player-skip-back"></i></button>
+  <button class="ctrl" id="btn-play" title="Play/Pause"><i class="ti ti-player-play"></i></button>
+  <button class="ctrl" id="btn-next" title="Nächster Titel"><i class="ti ti-player-skip-forward"></i></button>
+  <button class="ctrl" id="btn-love" title="Bei Last.fm liken" style="display:none"><i class="ti ti-heart"></i></button>
+  <div id="volume-wrap">
+    <i class="ti ti-volume"></i>
+    <input type="range" id="volume" min="0" max="1" step="0.02" value="0.8">
+  </div>
+</div>
+
+<audio id="audio"></audio>
+<audio id="audio-b"></audio>
+
+<script>
+const API = "";
+
+function fmt(s) {
+  if (!s || isNaN(s)) return "0:00";
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function initials(name) {
+  if (!name) return "♫";
+  return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join("");
+}
+
+function artistColor(name) {
+  let h = 0;
+  for (const c of (name || "?")) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return `hsl(${h % 360}, 55%, 40%)`;
+}
+
+// ── Audio ─────────────────────────────────────────────────
+const audio  = document.getElementById("audio");
+const audioB = document.getElementById("audio-b");
+audio.volume = 0.8;
+
+const CF_PRELOAD = 25;
+const CF_OUT     = 12;
+const CF_IN      =  8;
+
+const radio = { queue: [], playedIds: [], cfTimer: null, cfActive: false, session: 0 };
+
+let currentTrack  = null;
+let _scrobbled    = false;
+let _playCounted  = false;
+const lfm = { connected: false, lovedCache: new Map() };
+
+// ── Radio queue ───────────────────────────────────────────
+async function loadQueue(count, exclude = []) {
+  const p = new URLSearchParams({ count });
+  exclude.forEach(id => p.append("exclude", id));
+  try {
+    const res = await fetch(`${API}/api/random?${p}`);
+    return await res.json();
+  } catch { return []; }
+}
+
+async function startRadio() {
+  const initial = await loadQueue(5);
+  if (!initial.length) return;
+
+  radio.queue = initial;
+  radio.session = (radio.session || 0) + 1;
+  const mySession = radio.session;
+
+  playTrack(radio.queue.shift());
+
+  loadQueue(20, initial.map(t => t.id)).then(more => {
+    if (radio.session !== mySession) return;
+    radio.queue.push(...more);
+  });
+}
+
+async function radioNext() {
+  if (!radio.queue.length) {
+    const more = await loadQueue(20, radio.playedIds.slice(-100));
+    radio.queue.push(...more);
+  }
+  if (!radio.queue.length) return;
+
+  if (radio.queue.length <= 5) {
+    const mySession = radio.session;
+    loadQueue(20, radio.playedIds.slice(-100)).then(more => {
+      if (radio.session !== mySession) return;
+      radio.queue.push(...more);
+    });
+  }
+
+  playTrack(radio.queue.shift());
+}
+
+// ── Playback ──────────────────────────────────────────────
+function playTrack(track) {
+  if (!track) return;
+  if (currentTrack) radio.playedIds.push(currentTrack.id);
+  currentTrack  = track;
+  _scrobbled    = false;
+  _playCounted  = false;
+
+  radio.cfActive = false;
+  clearTimeout(radio.cfTimer);
+  audioB.pause(); audioB.removeAttribute("src"); audioB.load();
+
+  updateUI(track);
+  audio.src = `${API}/api/stream/${track.id}`;
+  audio.play().catch(() => {});
+
+  if (lfm.connected) {
+    lfmCheckLoved(track).then(loved => setLoved(loved));
+    fetch(`${API}/api/lastfm/nowplaying`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artist: track.artist, title: track.title, duration: track.duration }),
+    }).catch(() => {});
+  }
+}
+
+function updateUI(track) {
+  document.getElementById("not-playing").style.display = "none";
+  document.getElementById("track-info").style.display  = "";
+  document.getElementById("progress-wrap").style.display = "";
+
+  document.getElementById("track-title").textContent  = track.title  || "—";
+  document.getElementById("track-artist").textContent = track.artist || "";
+  document.title = track.title ? `${track.title} – ${track.artist || ""}` : "Adolar Radio";
+
+  const inner = document.getElementById("cover-inner");
+  inner.innerHTML = "";
+  if (track.has_cover) {
+    const img = document.createElement("img");
+    img.src = `${API}/api/cover/${track.cover_hash}`;
+    img.onerror = () => { inner.innerHTML = ""; inner.appendChild(makePh(track)); };
+    inner.appendChild(img);
+  } else {
+    inner.appendChild(makePh(track));
+  }
+}
+
+function makePh(track) {
+  const div = document.createElement("div");
+  div.className = "cover-ph";
+  div.style.background = artistColor(track.artist);
+  div.textContent = initials(track.artist);
+  return div;
+}
+
+function setPlayBtn(playing) {
+  document.getElementById("btn-play").innerHTML = playing
+    ? `<i class="ti ti-player-pause"></i>`
+    : `<i class="ti ti-player-play"></i>`;
+}
+
+// ── Preload + Crossfade ───────────────────────────────────
+function preloadNext() {
+  if (!radio.queue.length || audioB.src) return;
+  const next = radio.queue[0];
+  audioB.src = `${API}/api/stream/${next.id}`;
+  audioB.preload = "auto";
+  audioB.load();
+}
+
+function startCrossfade() {
+  if (radio.cfActive || !radio.queue.length) return;
+
+  const doFade = () => {
+    radio.cfActive = true;
+    const dur = CF_IN * 1000;
+    const start = performance.now();
+
+    audioB.volume = 0;
+    audioB.play().catch(() => {});
+
+    radio.cfTimer = setInterval(() => {
+      const elapsed = performance.now() - start;
+      const progress = Math.min(elapsed / dur, 1);
+      const t = progress;
+      audio.volume  = Math.cos(t * Math.PI / 2) * document.getElementById("volume").valueAsNumber;
+      audioB.volume = Math.sin(t * Math.PI / 2) * document.getElementById("volume").valueAsNumber;
+
+      if (progress >= 1) {
+        clearInterval(radio.cfTimer);
+        audio.pause(); audio.src = "";
+        // swap
+        const tmp = audio; // can't swap const, use src trick
+        audio.src = audioB.src;
+        audio.volume = document.getElementById("volume").valueAsNumber;
+        audioB.pause(); audioB.removeAttribute("src"); audioB.load();
+        radio.cfActive = false;
+        radioNext();
+      }
+    }, 50);
+  };
+
+  if (audioB.readyState >= 3) {
+    doFade();
+  } else {
+    audioB.addEventListener("canplay", doFade, { once: true });
+  }
+}
+
+// ── Audio events ──────────────────────────────────────────
+audio.addEventListener("play",  () => setPlayBtn(true));
+audio.addEventListener("pause", () => setPlayBtn(false));
+audio.addEventListener("ended", () => { if (!radio.cfActive) radioNext(); });
+
+audio.addEventListener("timeupdate", () => {
+  const cur = audio.currentTime;
+  const dur = audio.duration;
+  if (!dur) return;
+
+  document.getElementById("time-cur").textContent = fmt(cur);
+  document.getElementById("time-dur").textContent = fmt(dur);
+  document.getElementById("progress").value = (cur / dur) * 100;
+
+  const left = dur - cur;
+
+  if (left <= CF_PRELOAD && !audioB.src) preloadNext();
+  if (left <= CF_OUT)    startCrossfade();
+
+  if (!_scrobbled && cur / dur >= 0.5) {
+    _scrobbled = true;
+    if (lfm.connected && currentTrack) {
+      fetch(`${API}/api/lastfm/scrobble`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist: currentTrack.artist, title: currentTrack.title }),
+      }).catch(() => {});
+    }
+  }
+
+  if (!_playCounted && cur / dur >= 0.9) {
+    _playCounted = true;
+    if (currentTrack) {
+      fetch(`${API}/api/track/${currentTrack.id}/played`, { method: "POST" }).catch(() => {});
+    }
+  }
+});
+
+// ── Controls ──────────────────────────────────────────────
+document.getElementById("btn-play").onclick = () => audio.paused ? audio.play() : audio.pause();
+document.getElementById("btn-next").onclick = () => {
+  radio.cfActive = false;
+  clearInterval(radio.cfTimer);
+  audioB.pause(); audioB.removeAttribute("src"); audioB.load();
+  audio.volume = document.getElementById("volume").valueAsNumber;
+  radioNext();
+};
+document.getElementById("btn-prev").onclick = () => {
+  if (audio.currentTime > 5) { audio.currentTime = 0; return; }
+  if (radio.playedIds.length) {
+    const prevId = radio.playedIds.pop();
+    radio.queue.unshift(currentTrack);
+    fetch(`${API}/api/search?q=&per_page=1&page=1`)
+      .catch(() => {});
+    // simple: just restart current if no prev available
+    audio.currentTime = 0;
+  }
+};
+document.getElementById("progress").oninput = e => {
+  if (audio.duration) audio.currentTime = (e.target.value / 100) * audio.duration;
+};
+document.getElementById("volume").oninput = e => {
+  audio.volume  = e.target.valueAsNumber;
+  audioB.volume = e.target.valueAsNumber;
+};
+
+// ── Last.fm ───────────────────────────────────────────────
+async function lfmInit() {
+  try {
+    const res  = await fetch(`${API}/api/lastfm/status`);
+    const data = await res.json();
+    lfm.connected = data.connected;
+    document.getElementById("btn-love").style.display = lfm.connected ? "" : "none";
+  } catch { lfm.connected = false; }
+}
+
+async function lfmCheckLoved(track) {
+  if (!lfm.connected || !track) return false;
+  const key = `${track.artist}||${track.title}`;
+  if (lfm.lovedCache.has(key)) return lfm.lovedCache.get(key);
+  try {
+    const p = new URLSearchParams({ artist: track.artist || "", title: track.title || "" });
+    const res = await fetch(`${API}/api/lastfm/loved?${p}`);
+    const data = await res.json();
+    lfm.lovedCache.set(key, data.loved);
+    return data.loved;
+  } catch { return false; }
+}
+
+function setLoved(loved) {
+  const btn = document.getElementById("btn-love");
+  btn.classList.toggle("loved", loved);
+  btn.title = loved ? "Nicht mehr mögen (Last.fm)" : "Bei Last.fm liken";
+  btn.innerHTML = loved ? `<i class="ti ti-heart-filled"></i>` : `<i class="ti ti-heart"></i>`;
+  if (currentTrack) {
+    lfm.lovedCache.set(`${currentTrack.artist}||${currentTrack.title}`, loved);
+  }
+}
+
+document.getElementById("btn-love").onclick = async () => {
+  if (!lfm.connected || !currentTrack) return;
+  const key = `${currentTrack.artist}||${currentTrack.title}`;
+  const isLoved = lfm.lovedCache.get(key) || false;
+  try {
+    await fetch(`${API}/api/lastfm/love`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artist: currentTrack.artist, title: currentTrack.title, action: isLoved ? "unlove" : "love" }),
+    });
+    setLoved(!isLoved);
+  } catch {}
+};
+
+// ── Notify main window via BroadcastChannel ───────────────
+const ch = new BroadcastChannel("musikarchiv-player");
+audio.addEventListener("play",  () => ch.postMessage({ type: "playstate", playing: true }));
+audio.addEventListener("pause", () => ch.postMessage({ type: "playstate", playing: false }));
+
+// ── Settings (calls Python via pywebview) ─────────────────
+function openSettings() {
+  if (window.pywebview) {
+    window.pywebview.api.open_settings();
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────
+lfmInit().then(() => startRadio());
+</script>
+</body>
+</html>

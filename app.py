@@ -54,6 +54,11 @@ def miniplayer():
     return render_template("miniplayer.html")
 
 
+@app.get("/radio")
+def radio_companion():
+    return render_template("radio.html")
+
+
 # ── Tracks ────────────────────────────────────────────────────────────────────
 
 @app.get("/api/search")
