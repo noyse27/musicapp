@@ -127,8 +127,10 @@ def api_cover(hash_):
     if data is None:
         abort(404)
     import io
-    return send_file(io.BytesIO(data), mimetype=mime,
-                     max_age=86400 * 30)
+    resp = send_file(io.BytesIO(data), mimetype=mime, max_age=86400 * 365)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    resp.headers["ETag"] = f'"{hash_}"'
+    return resp
 
 
 # ── Audio streaming ───────────────────────────────────────────────────────────
