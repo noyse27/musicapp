@@ -307,7 +307,7 @@ function playTrack(track) {
   _playCounted  = false;
 
   radio.cfActive = false;
-  clearTimeout(radio.cfTimer);
+  cancelAnimationFrame(radio.cfTimer);
   const inactiveEl = getInactive();
   inactiveEl.pause(); inactiveEl.removeAttribute("src"); inactiveEl.load();
 
@@ -386,7 +386,7 @@ function startCrossfade() {
     inactive.volume = 0;
     inactive.play().catch(() => {});
 
-    radio.cfTimer = setInterval(() => {
+    const tick = () => {
       const elapsed = performance.now() - start;
       const progress = Math.min(elapsed / dur, 1);
       const t = progress;
@@ -394,8 +394,9 @@ function startCrossfade() {
       audio.volume    = Math.cos(t * Math.PI / 2) * vol;
       inactive.volume = Math.sin(t * Math.PI / 2) * vol;
 
-      if (progress >= 1) {
-        clearInterval(radio.cfTimer);
+      if (progress < 1) {
+        radio.cfTimer = requestAnimationFrame(tick);
+      } else {
         const old = audio;
         audio = inactive;
         audio.volume = vol;
@@ -403,7 +404,8 @@ function startCrossfade() {
         radio.cfActive = false;
         radioNext();
       }
-    }, 50);
+    };
+    radio.cfTimer = requestAnimationFrame(tick);
   };
 
   if (inactive.readyState >= 3) {
@@ -461,7 +463,7 @@ for (const el of [audioA, audioB]) {
 document.getElementById("btn-play").onclick = () => audio.paused ? audio.play() : audio.pause();
 document.getElementById("btn-next").onclick = () => {
   radio.cfActive = false;
-  clearInterval(radio.cfTimer);
+  cancelAnimationFrame(radio.cfTimer);
   const inactive = getInactive();
   inactive.pause(); inactive.removeAttribute("src"); inactive.load();
   audio.volume = document.getElementById("volume").valueAsNumber;
