@@ -329,7 +329,8 @@ function updateUI(track) {
   document.getElementById("progress-wrap").style.display = "";
 
   document.getElementById("track-title").textContent  = track.title  || "—";
-  document.getElementById("track-artist").textContent = track.artist || "";
+  document.getElementById("track-artist").textContent =
+    [track.artist, track.year].filter(Boolean).join(" · ");
   document.title = track.title ? `${track.title} – ${track.artist || ""}` : "Adolar Radio";
 
   const inner = document.getElementById("cover-inner");

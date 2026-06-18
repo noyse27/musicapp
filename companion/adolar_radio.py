@@ -97,6 +97,18 @@ def save_config(data: dict):
         json.dump(data, f, indent=2)
 
 
+def icon_path() -> str | None:
+    """Find logo.png next to script / exe for use as window icon."""
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png"),
+        os.path.join(os.path.dirname(sys.executable), "logo.png"),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
 def logo_b64() -> str:
     """Return base64-encoded logo.svg from same dir as this script / the exe."""
     import base64
@@ -144,6 +156,8 @@ def main():
     win_ref = [None]
     api = Api(win_ref)
 
+    ico = icon_path()
+
     if url:
         radio_url = url.rstrip("/") + "/radio"
         win = webview.create_window(
@@ -169,7 +183,7 @@ def main():
         )
 
     win_ref[0] = win
-    webview.start(debug=False, private_mode=False)
+    webview.start(debug=False, private_mode=False, icon=ico)
 
 
 if __name__ == "__main__":

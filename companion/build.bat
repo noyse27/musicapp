@@ -1,10 +1,16 @@
 @echo off
 echo Installing dependencies...
-pip install pywebview pyinstaller
+pip install pywebview pyinstaller cairosvg Pillow
 if errorlevel 1 (
     echo.
     echo ERROR: pip failed. Make sure Python is installed and in PATH.
     pause & exit /b 1
+)
+
+echo Generating icons...
+python make_icon.py
+if errorlevel 1 (
+    echo WARNING: Icon generation failed - exe will have no custom icon.
 )
 
 echo Building AdolarRadio.exe (single file)...

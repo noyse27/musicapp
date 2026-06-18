@@ -9,6 +9,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('logo.svg', '.'),
+        ('logo.png', '.'),
     ],
     hiddenimports=[
         'webview',
@@ -46,6 +47,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon='logo.ico',
     onefile=True,
 )
