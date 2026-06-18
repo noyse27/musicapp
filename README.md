@@ -14,12 +14,13 @@ A self-hosted music archive web app for Synology NAS (or any Docker host). Brows
 - **Cover art** with colored initials fallback
 - **HTTP range streaming** — seekable audio in the browser
 - **Radio / Shuffle mode** — starts instantly, equal-power crossfade (12 s out / 8 s in), next track pre-buffered silently before crossfade begins
-- **Mini-player** — detachable floating player, freely draggable, docks back to the bar with one click
+- **AdolarRadio** — Windows companion app: native window without browser, auto-starts radio, settings dialog for server URL, buildable to a single `.exe`
+- **Mini-player** — popup window that stays open across tab switches, shows cover art, controls, progress bar, and Last.fm love button
 - **Download basket** — select tracks and export as ZIP
 - **Background scanner** — indexes your music library without blocking the UI; re-scans skip unchanged files (mtime check) for fast incremental updates
 - **Play count tracking** — reads and writes ID3 `PCNT` (MP3), Vorbis comment (FLAC), iTunes tag (M4A) at 90 % playback; uses `MAX(tag, db) + 1` to protect counts from external players
 - **Last.fm integration** — Now Playing, Scrobble (at 50 %), Love / Unlove tracks
-- **Now Playing in browser tab** — page title updates to `Track – Artist` while playing
+- **Now Playing in browser tab** — scrolling page title `Track – Artist (Year)` while playing
 - **Cover art** with colored initials fallback; broken images automatically replaced by initials
 - **Dark mode** — warm gray palette
 
@@ -96,7 +97,30 @@ To disconnect, click the **✕** next to your username.
 
 ## Mini-Player
 
-Click **Mini** in the top bar to detach a floating player. It shows cover art, track title, artist, and play/pause/skip controls. Drag it anywhere on screen; click the dock button (↙) to snap it back to the main player bar.
+Click **Mini** in the top bar to open a detached popup window. It shows cover art, track title, artist, progress bar with seek, and play/pause/skip/love controls. The window stays open when you switch browser tabs. State is synced via `BroadcastChannel`.
+
+## AdolarRadio – Windows Companion App
+
+A native Windows window that opens the Adolar radio mode — no browser required.
+
+**Run directly (Python):**
+```bat
+cd companion
+pip install pywebview
+python adolar_radio.py
+```
+
+On first launch a settings dialog asks for the Adolar server URL (e.g. `http://192.168.1.100:15002`). The setting is saved to `%APPDATA%\AdolarRadio\config.json`. The gear icon in the title bar reopens settings at any time.
+
+**Build a single `.exe`:**
+```bat
+cd companion
+build.bat
+```
+The finished `AdolarRadio.exe` is placed in `companion\dist\`.
+
+**Or open in browser directly:**  
+`http://<host>:15002/radio`
 
 ## Play Count
 
