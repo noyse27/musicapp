@@ -370,8 +370,9 @@ def api_lastfm_nowplaying():
     try:
         lastfm.now_playing(sk, artist, title, duration=body.get("duration"))
         return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        logging.getLogger(__name__).exception("Last.fm now_playing failed")
+        return jsonify({"error": "Last.fm request failed"}), 500
 
 
 @app.post("/api/lastfm/scrobble")
@@ -387,8 +388,9 @@ def api_lastfm_scrobble():
     try:
         lastfm.scrobble(sk, artist, title)
         return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        logging.getLogger(__name__).exception("Last.fm scrobble failed")
+        return jsonify({"error": "Last.fm request failed"}), 500
 
 
 @app.post("/api/lastfm/love")
@@ -408,8 +410,9 @@ def api_lastfm_love():
         else:
             lastfm.unlove(sk, artist, title)
         return jsonify({"ok": True, "loved": action == "love"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        logging.getLogger(__name__).exception("Last.fm love/unlove failed")
+        return jsonify({"error": "Last.fm request failed"}), 500
 
 
 @app.get("/api/lastfm/loved")
