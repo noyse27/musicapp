@@ -730,6 +730,15 @@
     }
     #btn-miniplayer:hover { background: var(--bg-secondary); }
 
+    /* ── Language Switch ─────────────────────────────────── */
+    .lang-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 18px; padding: 2px 4px; border-radius: 4px;
+      opacity: 0.4; transition: opacity .15s;
+    }
+    .lang-btn:hover { opacity: 0.8; }
+    .lang-btn.active { opacity: 1; }
+
     /* ── Empty state ──────────────────────────────────── */
     .empty-state {
       display: flex;
@@ -754,6 +763,10 @@
   </div>
   <div id="topbar-meta">Lade…</div>
   <div id="lastfm-status" style="flex-shrink:0;display:flex;align-items:center;gap:8px;font-size:var(--text-sm);color:var(--text-tertiary)"></div>
+  <div id="lang-switch" style="display:flex;gap:4px;flex-shrink:0">
+    <button class="lang-btn" id="lang-de" title="Deutsch" onclick="setLang('de')">🇩🇪</button>
+    <button class="lang-btn" id="lang-en" title="English" onclick="setLang('en')">🇬🇧</button>
+  </div>
   <button id="btn-miniplayer" title="Mini-Player abdocken">
     <i class="ti ti-player-eject" style="font-size:14px"></i> Mini
   </button>
@@ -786,9 +799,9 @@
   <aside id="sidebar">
 
     <div class="filter-section">
-      <span class="filter-label">Interpret</span>
+      <span class="filter-label" data-i18n="artist">Interpret</span>
       <div class="chip-group">
-        <button class="chip active" id="chip-artist-alle" data-val="">Alle</button>
+        <button class="chip chip-alle active" id="chip-artist-alle" data-val="">Alle</button>
       </div>
       <div id="chips-artist-list" style="display:none;margin-top:6px">
         <div class="chip-group" id="chips-artist-inner"></div>
@@ -796,9 +809,9 @@
     </div>
 
     <div class="filter-section">
-      <span class="filter-label">Titel</span>
+      <span class="filter-label" data-i18n="title_filter">Titel</span>
       <div class="chip-group">
-        <button class="chip active" id="chip-title-alle" data-val="">Alle</button>
+        <button class="chip chip-alle active" id="chip-title-alle" data-val="">Alle</button>
       </div>
       <div id="chips-title-list" style="display:none;margin-top:6px">
         <div class="chip-group" id="chips-title-inner"></div>
@@ -806,9 +819,9 @@
     </div>
 
     <div class="filter-section">
-      <span class="filter-label">Genre</span>
+      <span class="filter-label" data-i18n="genre">Genre</span>
       <div class="chip-group" id="chips-genre">
-        <button class="chip active" data-val="" id="chip-genre-alle">Alle</button>
+        <button class="chip chip-alle active" data-val="" id="chip-genre-alle">Alle</button>
       </div>
       <div id="chips-genre-list" style="display:none;margin-top:6px">
         <div class="chip-group" id="chips-genre-inner"></div>
@@ -816,20 +829,20 @@
     </div>
 
     <div class="filter-section">
-      <span class="filter-label">Jahrzehnt</span>
+      <span class="filter-label" data-i18n="decade">Jahrzehnt</span>
       <div class="chip-group" id="chips-decade">
-        <button class="chip active" data-val="">Alle</button>
-        <button class="chip" data-val="1970">70er</button>
-        <button class="chip" data-val="1980">80er</button>
-        <button class="chip" data-val="1990">90er</button>
-        <button class="chip" data-val="2000">00er</button>
-        <button class="chip" data-val="2010">10er</button>
-        <button class="chip" data-val="2020">20er</button>
+        <button class="chip chip-alle active" data-val="">Alle</button>
+        <button class="chip" data-val="1970">70s</button>
+        <button class="chip" data-val="1980">80s</button>
+        <button class="chip" data-val="1990">90s</button>
+        <button class="chip" data-val="2000">00s</button>
+        <button class="chip" data-val="2010">10s</button>
+        <button class="chip" data-val="2020">20s</button>
       </div>
     </div>
 
     <div class="filter-section">
-      <span class="filter-label">Länge</span>
+      <span class="filter-label" data-i18n="length">Länge</span>
       <div class="slider-row">
         <div class="slider-item">
           <label>Min</label>
@@ -845,15 +858,15 @@
     </div>
 
     <div class="filter-section">
-      <span class="filter-label">Jahr</span>
+      <span class="filter-label" data-i18n="year">Jahr</span>
       <div class="slider-row">
         <div class="slider-item">
-          <label>Von</label>
+          <label id="label-year-from">Von</label>
           <input type="range" id="sl-year-min" min="1950" max="2025" step="1" value="1950">
           <span class="slider-val" id="sl-year-min-val">–</span>
         </div>
         <div class="slider-item">
-          <label>Bis</label>
+          <label id="label-year-to">Bis</label>
           <input type="range" id="sl-year-max" min="1950" max="2025" step="1" value="2025">
           <span class="slider-val" id="sl-year-max-val">–</span>
         </div>
@@ -861,9 +874,9 @@
     </div>
 
     <div class="filter-section">
-      <span class="filter-label">Format</span>
+      <span class="filter-label" data-i18n="format">Format</span>
       <div class="chip-group" id="chips-format">
-        <button class="chip active" data-val="">Alle</button>
+        <button class="chip chip-alle active" data-val="">Alle</button>
         <button class="chip" data-val="MP3">MP3</button>
         <button class="chip" data-val="FLAC">FLAC</button>
         <button class="chip" data-val="M4A">M4A</button>
@@ -871,7 +884,7 @@
     </div>
 
     <div class="filter-section">
-      <span class="filter-label">Mindest-Bitrate</span>
+      <span class="filter-label" data-i18n="min_bitrate">Mindest-Bitrate</span>
       <div class="slider-row">
         <div class="slider-item">
           <label>Min</label>
@@ -974,6 +987,164 @@
 const API = "";
 const $ = id => document.getElementById(id);
 
+// ── i18n ──────────────────────────────────────────────────
+const LANG = {
+  de: {
+    loading:          "Lade…",
+    artist:           "Interpret",
+    title_filter:     "Titel",
+    genre:            "Genre",
+    decade:           "Jahrzehnt",
+    length:           "Länge",
+    year:             "Jahr",
+    year_from:        "Von",
+    year_to:          "Bis",
+    format:           "Format",
+    min_bitrate:      "Mindest-Bitrate",
+    all:              "Alle",
+    scan_lib:         "Bibliothek scannen",
+    scanning:         "Bibliothek wird gescannt…",
+    search_ph:        "Titel, Interpret, Album durchsuchen…",
+    sort_artist:      "Interpret A–Z",
+    sort_title:       "Titel A–Z",
+    sort_album:       "Album A–Z",
+    sort_year:        "Nach Jahr",
+    sort_duration:    "Nach Dauer",
+    radio:            "Radio",
+    basket:           "Korb",
+    basket_empty:     "Korb ist leer",
+    basket_download:  "Als ZIP herunterladen",
+    basket_packing:   "Packe ZIP…",
+    basket_error:     "Download fehlgeschlagen.",
+    basket_remove:    "Entfernen",
+    basket_add:       "Zum Korb hinzufügen",
+    basket_rm:        "Aus Korb entfernen",
+    play:             "Abspielen",
+    prev:             "Zurück",
+    next:             "Weiter",
+    pg_prev:          "‹ Zurück",
+    pg_next:          "Weiter ›",
+    pg_info:          (p, t) => `Seite ${p} / ${t}`,
+    results:          (n) => `${n.toLocaleString("de")} Tracks`,
+    results_q:        (n, q) => `${n.toLocaleString("de")} Ergebnisse für „${q}"`,
+    radio_loading:    "Radio – …",
+    radio_tracks:     (n) => `Radio – ${n} Tracks`,
+    no_tracks:        "Keine Tracks gefunden.",
+    mini_title:       "Mini-Player abdocken",
+    lfm_love:         "Bei Last.fm liken",
+    lfm_unlove:       "Nicht mehr mögen (Last.fm)",
+    lfm_connect:      "Last.fm verbinden",
+    lfm_disconnect:   "Trennen",
+  },
+  en: {
+    loading:          "Loading…",
+    artist:           "Artist",
+    title_filter:     "Title",
+    genre:            "Genre",
+    decade:           "Decade",
+    length:           "Length",
+    year:             "Year",
+    year_from:        "From",
+    year_to:          "To",
+    format:           "Format",
+    min_bitrate:      "Min. Bitrate",
+    all:              "All",
+    scan_lib:         "Scan library",
+    scanning:         "Scanning library…",
+    search_ph:        "Search title, artist, album…",
+    sort_artist:      "Artist A–Z",
+    sort_title:       "Title A–Z",
+    sort_album:       "Album A–Z",
+    sort_year:        "By year",
+    sort_duration:    "By duration",
+    radio:            "Radio",
+    basket:           "Cart",
+    basket_empty:     "Cart is empty",
+    basket_download:  "Download as ZIP",
+    basket_packing:   "Packing ZIP…",
+    basket_error:     "Download failed.",
+    basket_remove:    "Remove",
+    basket_add:       "Add to cart",
+    basket_rm:        "Remove from cart",
+    play:             "Play",
+    prev:             "Previous",
+    next:             "Next",
+    pg_prev:          "‹ Back",
+    pg_next:          "Next ›",
+    pg_info:          (p, t) => `Page ${p} / ${t}`,
+    results:          (n) => `${n.toLocaleString("en")} tracks`,
+    results_q:        (n, q) => `${n.toLocaleString("en")} results for "${q}"`,
+    radio_loading:    "Radio – …",
+    radio_tracks:     (n) => `Radio – ${n} tracks`,
+    no_tracks:        "No tracks found.",
+    mini_title:       "Pop out mini-player",
+    lfm_love:         "Love on Last.fm",
+    lfm_unlove:       "Unlove on Last.fm",
+    lfm_connect:      "Connect Last.fm",
+    lfm_disconnect:   "Disconnect",
+  },
+};
+
+let lang = localStorage.getItem("adolar-lang") || "de";
+const t = () => LANG[lang];
+
+function setLang(l) {
+  lang = l;
+  localStorage.setItem("adolar-lang", l);
+  applyLang();
+}
+
+function applyLang() {
+  const L = t();
+  // Topbar
+  $("topbar-meta").textContent || ($("topbar-meta").textContent = L.loading);
+  $("btn-miniplayer").title = L.mini_title;
+  $("basket-label").textContent = L.basket;
+  $("basket-empty").textContent = L.basket_empty;
+  $("btn-basket-download").innerHTML = `<i class="ti ti-device-floppy"></i> ${L.basket_download}`;
+  // Sidebar labels
+  document.querySelectorAll(".filter-label").forEach(el => {
+    const key = el.dataset.i18n;
+    if (key && L[key]) el.textContent = L[key];
+  });
+  // Sidebar "Alle" chips
+  document.querySelectorAll(".chip-alle").forEach(el => el.textContent = L.all);
+  // Scan button
+  $("btn-scan").innerHTML = `<i class="ti ti-refresh"></i> ${L.scan_lib}`;
+  // Search
+  $("search").placeholder = L.search_ph;
+  // Sort options
+  const sortMap = { artist: "sort_artist", title: "sort_title", album: "sort_album", year: "sort_year", duration: "sort_duration" };
+  document.querySelectorAll("#sort-select option").forEach(o => {
+    const k = sortMap[o.value];
+    if (k) o.textContent = L[k];
+  });
+  // Player controls
+  $("btn-prev").title = L.prev;
+  $("btn-next").title = L.next;
+  $("player-love").title = L.lfm_love;
+  // Decade chips
+  const decadeEl = $("chips-decade");
+  if (decadeEl) decadeEl.querySelector(".chip[data-val='']").textContent = L.all;
+  // Year slider labels
+  const yfrom = $("label-year-from");
+  const yto   = $("label-year-to");
+  if (yfrom) yfrom.textContent = L.year_from;
+  if (yto)   yto.textContent   = L.year_to;
+  // Flag buttons
+  document.querySelectorAll(".lang-btn").forEach(b => b.classList.remove("active"));
+  const active = $(`lang-${lang}`);
+  if (active) active.classList.add("active");
+  // Re-render dynamic strings
+  renderPagination();
+  const rc = $("result-count");
+  if (rc && state.total !== undefined) {
+    rc.textContent = state.query
+      ? t().results_q(state.total, esc(state.query))
+      : t().results(state.total);
+  }
+}
+
 // ── State ─────────────────────────────────────────────────
 const basket = new Set();
 
@@ -1014,7 +1185,7 @@ function renderBasketPanel() {
         <div class="basket-item-title">${esc(t.title || "—")}</div>
         <div class="basket-item-sub">${esc(t.artist || "")}${t.year ? " · " + t.year : ""}</div>
       </div>
-      <button class="basket-remove" title="Entfernen"><i class="ti ti-x"></i></button>`;
+      <button class="basket-remove" title="${LANG[lang].basket_remove}"><i class="ti ti-x"></i></button>`;
     item.querySelector(".basket-remove").onclick = () => {
       basket.delete(id);
       basketTracks.delete(id);
@@ -1043,7 +1214,7 @@ document.addEventListener("click", e => {
 $("btn-basket-download").onclick = async () => {
   const dlBtn = $("btn-basket-download");
   dlBtn.disabled = true;
-  dlBtn.innerHTML = `<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Packe ZIP…`;
+  dlBtn.innerHTML = `<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> ${t().basket_packing}`;
   try {
     const res = await fetch(`${API}/api/download`, {
       method: "POST",
@@ -1063,10 +1234,10 @@ $("btn-basket-download").onclick = async () => {
     $("basket-panel").classList.remove("open");
     $("btn-basket").classList.remove("open");
   } catch {
-    alert("Download fehlgeschlagen.");
+    alert(t().basket_error);
   } finally {
     dlBtn.disabled = false;
-    dlBtn.innerHTML = `<i class="ti ti-device-floppy"></i> Als ZIP herunterladen`;
+    dlBtn.innerHTML = `<i class="ti ti-device-floppy"></i> ${t().basket_download}`;
   }
 };
 
@@ -1192,8 +1363,8 @@ async function loadTracks(page = 1) {
 
   const q = state.query;
   $("result-count").textContent = q
-    ? `${data.total.toLocaleString()} Ergebnisse für „${esc(q)}"`
-    : `${data.total.toLocaleString()} Tracks`;
+    ? t().results_q(data.total, esc(q))
+    : t().results(data.total);
 }
 
 // ── Render Tracks ─────────────────────────────────────────
@@ -1202,7 +1373,7 @@ function renderTracks() {
   list.innerHTML = "";
 
   if (!state.tracks.length) {
-    list.innerHTML = `<div class="empty-state"><i class="ti ti-music-off"></i>Keine Tracks gefunden.</div>`;
+    list.innerHTML = `<div class="empty-state"><i class="ti ti-music-off"></i>${t().no_tracks}</div>`;
     return;
   }
 
@@ -1232,7 +1403,7 @@ function renderTracks() {
     // Play button
     const playBtn = document.createElement("button");
     playBtn.className = "track-play-btn";
-    playBtn.title = "Abspielen";
+    playBtn.title = t().play;
     const isPlaying = state.currentTrack?.id === t.id && !audio.paused;
     playBtn.innerHTML = isPlaying
       ? `<i class="ti ti-player-pause"></i>`
@@ -1250,7 +1421,7 @@ function renderTracks() {
     // Download-Button
     const dlBtn = document.createElement("button");
     dlBtn.className = "track-play-btn";
-    dlBtn.title = basket.has(t.id) ? "Aus Korb entfernen" : "Zum Korb hinzufügen";
+    dlBtn.title = basket.has(t.id) ? t().basket_rm : t().basket_add;
     dlBtn.innerHTML = basket.has(t.id)
       ? `<i class="ti ti-shopping-cart-off" style="color:var(--accent)"></i>`
       : `<i class="ti ti-download"></i>`;
@@ -1275,7 +1446,7 @@ function renderTracks() {
       const isLoved = lfm.lovedCache.get(loveKey) || false;
       loveBtn.className = "btn-love" + (isLoved ? " loved" : "");
       loveBtn.dataset.key = loveKey;
-      loveBtn.title = isLoved ? "Nicht mehr mögen (Last.fm)" : "Bei Last.fm liken";
+      loveBtn.title = isLoved ? t().lfm_unlove : t().lfm_love;
       loveBtn.innerHTML = isLoved
         ? `<i class="ti ti-heart-filled"></i>`
         : `<i class="ti ti-heart"></i>`;
@@ -1305,18 +1476,18 @@ function renderPagination() {
   if (state.pages <= 1) return;
 
   const prev = document.createElement("button");
-  prev.className = "pg-btn"; prev.textContent = "‹ Zurück";
+  prev.className = "pg-btn"; prev.textContent = t().pg_prev;
   prev.disabled = state.page <= 1;
   prev.onclick = () => loadTracks(state.page - 1);
   pg.appendChild(prev);
 
   const info = document.createElement("span");
   info.id = "pg-info";
-  info.textContent = `Seite ${state.page} / ${state.pages}`;
+  info.textContent = t().pg_info(state.page, state.pages);
   pg.appendChild(info);
 
   const next = document.createElement("button");
-  next.className = "pg-btn"; next.textContent = "Weiter ›";
+  next.className = "pg-btn"; next.textContent = t().pg_next;
   next.disabled = state.page >= state.pages;
   next.onclick = () => loadTracks(state.page + 1);
   pg.appendChild(next);
@@ -1420,7 +1591,7 @@ async function startRadio() {
   radio.queue   = initial;
   radio.session = (radio.session || 0) + 1; // session token prevents stale fills
   state.tracks  = [...radio.queue];
-  $("result-count").textContent = `Radio – …`;
+  $("result-count").textContent = t().radio_loading;
   playTrack(0);
 
   // Background fill to 25 — guarded by session token
@@ -1429,7 +1600,7 @@ async function startRadio() {
     if (!radio.active || radio.session !== mySession) return;
     radio.queue.push(...more);
     state.tracks = [...radio.queue];
-    $("result-count").textContent = `Radio – ${radio.queue.length} Tracks`;
+    $("result-count").textContent = t().radio_tracks(radio.queue.length);
     renderTracks();
   });
 }
@@ -1701,14 +1872,14 @@ function renderLfmStatus() {
       <img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/lastdotfm.svg"
            width="14" height="14" style="filter:invert(.5) sepia(1) saturate(3) hue-rotate(310deg);opacity:.8">
       <span>${esc(lfm.username)}</span>
-      <button id="lastfm-connect" onclick="lfmDisconnect()" title="Trennen">✕</button>`;
+      <button id="lastfm-connect" onclick="lfmDisconnect()" title="${t().lfm_disconnect}">✕</button>`;
     $("player-love").style.display = "";
   } else {
     el.innerHTML = `
       <button id="lastfm-connect" onclick="location.href='/api/lastfm/auth'">
         <img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/lastdotfm.svg"
              width="13" height="13" style="filter:invert(.5) sepia(1) saturate(3) hue-rotate(310deg)">
-        Last.fm verbinden
+        ${t().lfm_connect}
       </button>`;
     $("player-love").style.display = "none";
   }
@@ -1767,7 +1938,7 @@ async function lfmToggleLove(track, btn) {
 function applyLovedState(btn, loved) {
   if (!btn) return;
   btn.classList.toggle("loved", loved);
-  btn.title = loved ? "Nicht mehr mögen (Last.fm)" : "Bei Last.fm liken";
+  btn.title = loved ? t().lfm_unlove : t().lfm_love;
   btn.innerHTML = loved
     ? `<i class="ti ti-heart-filled"></i>`
     : `<i class="ti ti-heart"></i>`;
@@ -1967,7 +2138,7 @@ async function checkScanOnce() {
       _missedFinish = 0;
       const done  = data.progress.toLocaleString();
       const total = data.total > 0 ? ` / ${data.total.toLocaleString()}` : "";
-      showBanner(`⟳ Bibliothek wird gescannt… ${done}${total} Tracks`);
+      showBanner(`⟳ ${t().scanning} ${done}${total}`);
       loadStats();
       return true;
     } else {
@@ -2002,12 +2173,13 @@ setInterval(loadStats, 60000);
 
 // ── Init ───────────────────────────────────────────────────
 (async () => {
+  applyLang();
   await Promise.all([loadStats(), loadGenres(), loadTracks(1), lfmInit()]);
 
   const res  = await fetch(`${API}/api/scan/status`);
   const data = await res.json();
   if (data.running) {
-    showBanner("Bibliothek wird gescannt…");
+    showBanner(t().scanning);
     startScanPolling();
   }
 })();
