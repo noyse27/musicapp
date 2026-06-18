@@ -101,6 +101,8 @@ Click **Mini** in the top bar to open a detached popup window. It shows cover ar
 
 ## AdolarRadio – Windows Companion App
 
+![AdolarRadio](docs/screenshot_companion.png)
+
 A native Windows window that opens the Adolar radio mode — no browser required.
 
 **Run directly (Python):**
