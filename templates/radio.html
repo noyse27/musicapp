@@ -238,9 +238,10 @@ function artistColor(name) {
 }
 
 // ── Audio ─────────────────────────────────────────────────
-const audio  = document.getElementById("audio");
+const audioA = document.getElementById("audio");
 const audioB = document.getElementById("audio-b");
-audio.volume = 0.8;
+let audio = audioA;   // mutable "active" reference — swapped on each crossfade
+audioA.volume = 0.8;
 
 const CF_PRELOAD = 25;
 const CF_OUT     = 12;
@@ -307,7 +308,8 @@ function playTrack(track) {
 
   radio.cfActive = false;
   clearTimeout(radio.cfTimer);
-  audioB.pause(); audioB.removeAttribute("src"); audioB.load();
+  const inactiveEl = getInactive();
+  inactiveEl.pause(); inactiveEl.removeAttribute("src"); inactiveEl.load();
 
   updateUI(track);
   audio.src = `${API}/api/stream/${track.id}`;
@@ -360,59 +362,63 @@ function setPlayBtn(playing) {
 }
 
 // ── Preload + Crossfade ───────────────────────────────────
+function getInactive() { return audio === audioA ? audioB : audioA; }
+
 function preloadNext() {
-  if (!radio.queue.length || audioB.src) return;
+  const inactive = getInactive();
+  if (!radio.queue.length || inactive.src) return;
   const next = radio.queue[0];
-  audioB.src = `${API}/api/stream/${next.id}`;
-  audioB.preload = "auto";
-  audioB.load();
+  inactive.src = `${API}/api/stream/${next.id}`;
+  inactive.preload = "auto";
+  inactive.load();
 }
 
 function startCrossfade() {
   if (radio.cfActive || !radio.queue.length) return;
+  const inactive = getInactive();
 
   const doFade = () => {
     radio.cfActive = true;
     const dur = CF_IN * 1000;
     const start = performance.now();
+    const volSlider = document.getElementById("volume");
 
-    audioB.volume = 0;
-    audioB.play().catch(() => {});
+    inactive.volume = 0;
+    inactive.play().catch(() => {});
 
     radio.cfTimer = setInterval(() => {
       const elapsed = performance.now() - start;
       const progress = Math.min(elapsed / dur, 1);
       const t = progress;
-      audio.volume  = Math.cos(t * Math.PI / 2) * document.getElementById("volume").valueAsNumber;
-      audioB.volume = Math.sin(t * Math.PI / 2) * document.getElementById("volume").valueAsNumber;
+      const vol = volSlider.valueAsNumber;
+      audio.volume    = Math.cos(t * Math.PI / 2) * vol;
+      inactive.volume = Math.sin(t * Math.PI / 2) * vol;
 
       if (progress >= 1) {
         clearInterval(radio.cfTimer);
-        audio.pause(); audio.src = "";
-        // swap
-        const tmp = audio; // can't swap const, use src trick
-        audio.src = audioB.src;
-        audio.volume = document.getElementById("volume").valueAsNumber;
-        audioB.pause(); audioB.removeAttribute("src"); audioB.load();
+        const old = audio;
+        audio = inactive;
+        audio.volume = vol;
+        old.pause(); old.removeAttribute("src"); old.load();
         radio.cfActive = false;
         radioNext();
       }
     }, 50);
   };
 
-  if (audioB.readyState >= 3) {
+  if (inactive.readyState >= 3) {
     doFade();
   } else {
-    audioB.addEventListener("canplay", doFade, { once: true });
+    inactive.addEventListener("canplay", doFade, { once: true });
   }
 }
 
 // ── Audio events ──────────────────────────────────────────
-audio.addEventListener("play",  () => setPlayBtn(true));
-audio.addEventListener("pause", () => setPlayBtn(false));
-audio.addEventListener("ended", () => { if (!radio.cfActive) radioNext(); });
-
-audio.addEventListener("timeupdate", () => {
+function onPlay(e)  { if (e.target === audio) setPlayBtn(true); }
+function onPause(e) { if (e.target === audio) setPlayBtn(false); }
+function onEnded(e) { if (e.target === audio && !radio.cfActive) radioNext(); }
+function onTimeUpdate(e) {
+  if (e.target !== audio) return;
   const cur = audio.currentTime;
   const dur = audio.duration;
   if (!dur) return;
@@ -422,8 +428,8 @@ audio.addEventListener("timeupdate", () => {
   document.getElementById("progress").value = (cur / dur) * 100;
 
   const left = dur - cur;
-
-  if (left <= CF_PRELOAD && !audioB.src) preloadNext();
+  const inactive = audio === audioA ? audioB : audioA;
+  if (left <= CF_PRELOAD && !inactive.src) preloadNext();
   if (left <= CF_OUT)    startCrossfade();
 
   if (!_scrobbled && cur / dur >= 0.5) {
@@ -443,14 +449,21 @@ audio.addEventListener("timeupdate", () => {
       fetch(`${API}/api/track/${currentTrack.id}/played`, { method: "POST" }).catch(() => {});
     }
   }
-});
+}
+for (const el of [audioA, audioB]) {
+  el.addEventListener("play",       onPlay);
+  el.addEventListener("pause",      onPause);
+  el.addEventListener("ended",      onEnded);
+  el.addEventListener("timeupdate", onTimeUpdate);
+}
 
 // ── Controls ──────────────────────────────────────────────
 document.getElementById("btn-play").onclick = () => audio.paused ? audio.play() : audio.pause();
 document.getElementById("btn-next").onclick = () => {
   radio.cfActive = false;
   clearInterval(radio.cfTimer);
-  audioB.pause(); audioB.removeAttribute("src"); audioB.load();
+  const inactive = getInactive();
+  inactive.pause(); inactive.removeAttribute("src"); inactive.load();
   audio.volume = document.getElementById("volume").valueAsNumber;
   radioNext();
 };
@@ -469,7 +482,7 @@ document.getElementById("progress").oninput = e => {
   if (audio.duration) audio.currentTime = (e.target.value / 100) * audio.duration;
 };
 document.getElementById("volume").oninput = e => {
-  audio.volume  = e.target.valueAsNumber;
+  audioA.volume = e.target.valueAsNumber;
   audioB.volume = e.target.valueAsNumber;
 };
 
