@@ -1,6 +1,6 @@
 @echo off
 echo Installing dependencies...
-pip install pywebview pyinstaller cairosvg Pillow
+pip install pywebview pyinstaller Pillow
 if errorlevel 1 (
     echo.
     echo ERROR: pip failed. Make sure Python is installed and in PATH.
