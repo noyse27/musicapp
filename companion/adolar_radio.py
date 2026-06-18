@@ -97,29 +97,30 @@ def save_config(data: dict):
         json.dump(data, f, indent=2)
 
 
+def _base_dirs():
+    dirs = [os.path.dirname(os.path.abspath(__file__))]
+    if hasattr(sys, "_MEIPASS"):
+        dirs.insert(0, sys._MEIPASS)
+    dirs.append(os.path.dirname(sys.executable))
+    return dirs
+
+
 def icon_path() -> str | None:
-    """Find logo.png next to script / exe for use as window icon."""
-    candidates = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png"),
-        os.path.join(os.path.dirname(sys.executable), "logo.png"),
-    ]
-    for p in candidates:
+    for d in _base_dirs():
+        p = os.path.join(d, "logo.png")
         if os.path.isfile(p):
             return p
     return None
 
 
 def logo_b64() -> str:
-    """Return base64-encoded logo.svg from same dir as this script / the exe."""
     import base64
-    candidates = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static", "logo.svg"),
-        os.path.join(os.path.dirname(sys.executable), "logo.svg"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.svg"),
-    ]
-    for path in candidates:
-        if os.path.isfile(path):
-            with open(path, "rb") as f:
+    candidates = [d for d in _base_dirs()]
+    candidates.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static"))
+    for d in candidates:
+        p = os.path.join(d, "logo.svg")
+        if os.path.isfile(p):
+            with open(p, "rb") as f:
                 return base64.b64encode(f.read()).decode()
     return ""
 
