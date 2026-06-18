@@ -280,7 +280,7 @@ async function startRadio() {
   });
 }
 
-async function radioNext() {
+async function radioNext(fromCrossfade = false) {
   if (!radio.queue.length) {
     const more = await loadQueue(20, radio.playedIds.slice(-100));
     radio.queue.push(...more);
@@ -295,7 +295,25 @@ async function radioNext() {
     });
   }
 
-  playTrack(radio.queue.shift());
+  const track = radio.queue.shift();
+  if (fromCrossfade) {
+    // audio is already playing the new track — just update metadata
+    if (currentTrack) radio.playedIds.push(currentTrack.id);
+    currentTrack = track;
+    _scrobbled   = false;
+    _playCounted = false;
+    updateUI(track);
+    if (lfm.connected) {
+      lfmCheckLoved(track).then(loved => setLoved(loved));
+      fetch(`${API}/api/lastfm/nowplaying`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist: track.artist, title: track.title }),
+      }).catch(() => {});
+    }
+  } else {
+    playTrack(track);
+  }
 }
 
 // ── Playback ──────────────────────────────────────────────
@@ -402,7 +420,7 @@ function startCrossfade() {
         audio.volume = vol;
         old.pause(); old.removeAttribute("src"); old.load();
         radio.cfActive = false;
-        radioNext();
+        radioNext(true);
       }
     };
     radio.cfTimer = requestAnimationFrame(tick);
