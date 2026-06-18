@@ -1377,40 +1377,40 @@ function renderTracks() {
     return;
   }
 
-  state.tracks.forEach((t, i) => {
+  state.tracks.forEach((track, i) => {
     const row = document.createElement("div");
-    row.className = "track-row" + (state.currentTrack?.id === t.id ? " active" : "");
+    row.className = "track-row" + (state.currentTrack?.id === track.id ? " active" : "");
     row.dataset.idx = i;
 
     // Cover
-    row.appendChild(makeCover(t, 42));
+    row.appendChild(makeCover(track, 42));
 
     // Info
     const info = document.createElement("div");
     info.className = "track-info";
-    const sub = [t.artist, t.album, t.year].filter(Boolean).join(" · ");
-    info.innerHTML = `<div class="track-title">${esc(t.title || t.path?.split(/[\\/]/).pop() || "—")}</div>
+    const sub = [track.artist, track.album, track.year].filter(Boolean).join(" · ");
+    info.innerHTML = `<div class="track-title">${esc(track.title || track.path?.split(/[\\/]/).pop() || "—")}</div>
                       <div class="track-sub">${esc(sub)}</div>`;
     row.appendChild(info);
 
     // Meta
     const meta = document.createElement("div");
     meta.className = "track-meta";
-    meta.innerHTML = `<span class="format-badge">${esc(t.format)}</span>
-                      <span class="track-dur">${t.duration_fmt || fmt(t.duration)}</span>`;
+    meta.innerHTML = `<span class="format-badge">${esc(track.format)}</span>
+                      <span class="track-dur">${track.duration_fmt || fmt(track.duration)}</span>`;
     row.appendChild(meta);
 
     // Play button
     const playBtn = document.createElement("button");
     playBtn.className = "track-play-btn";
     playBtn.title = t().play;
-    const isPlaying = state.currentTrack?.id === t.id && !audio.paused;
+    const isPlaying = state.currentTrack?.id === track.id && !audio.paused;
     playBtn.innerHTML = isPlaying
       ? `<i class="ti ti-player-pause"></i>`
       : `<i class="ti ti-player-play"></i>`;
     playBtn.addEventListener("click", e => {
       e.stopPropagation();
-      if (state.currentTrack?.id === t.id) {
+      if (state.currentTrack?.id === track.id) {
         audio.paused ? audio.play() : audio.pause();
       } else {
         playTrack(i);
@@ -1421,18 +1421,18 @@ function renderTracks() {
     // Download-Button
     const dlBtn = document.createElement("button");
     dlBtn.className = "track-play-btn";
-    dlBtn.title = basket.has(t.id) ? t().basket_rm : t().basket_add;
-    dlBtn.innerHTML = basket.has(t.id)
+    dlBtn.title = basket.has(track.id) ? t().basket_rm : t().basket_add;
+    dlBtn.innerHTML = basket.has(track.id)
       ? `<i class="ti ti-shopping-cart-off" style="color:var(--accent)"></i>`
       : `<i class="ti ti-download"></i>`;
     dlBtn.addEventListener("click", e => {
       e.stopPropagation();
-      if (basket.has(t.id)) {
-        basket.delete(t.id);
-        basketTracks.delete(t.id);
+      if (basket.has(track.id)) {
+        basket.delete(track.id);
+        basketTracks.delete(track.id);
       } else {
-        basket.add(t.id);
-        basketTracks.set(t.id, t);
+        basket.add(track.id);
+        basketTracks.set(track.id, track);
       }
       updateBasketUI();
       renderTracks();
@@ -1442,7 +1442,7 @@ function renderTracks() {
     // Love button (Last.fm)
     if (lfm.connected) {
       const loveBtn = document.createElement("button");
-      const loveKey = `${t.artist}||${t.title}`;
+      const loveKey = `${track.artist}||${track.title}`;
       const isLoved = lfm.lovedCache.get(loveKey) || false;
       loveBtn.className = "btn-love" + (isLoved ? " loved" : "");
       loveBtn.dataset.key = loveKey;
@@ -1452,12 +1452,12 @@ function renderTracks() {
         : `<i class="ti ti-heart"></i>`;
       loveBtn.addEventListener("click", e => {
         e.stopPropagation();
-        lfmToggleLove(t, loveBtn);
+        lfmToggleLove(track, loveBtn);
       });
       row.appendChild(loveBtn);
       // lazy-load loved status if not cached
       if (!lfm.lovedCache.has(loveKey)) {
-        lfmCheckLoved(t).then(loved => {
+        lfmCheckLoved(track).then(loved => {
           lfm.lovedCache.set(loveKey, loved);
           applyLovedState(loveBtn, loved);
         });
