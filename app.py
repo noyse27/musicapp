@@ -248,6 +248,17 @@ def api_download():
 
 # ── Play count ───────────────────────────────────────────────────────────────
 
+@app.post("/api/track/<int:track_id>/bpm")
+def api_track_bpm(track_id):
+    """Accept a BPM value from an external tool (e.g. Adolar Disco)."""
+    data = request.get_json(silent=True) or {}
+    bpm = data.get("bpm")
+    if bpm is None or not isinstance(bpm, (int, float)) or bpm <= 0:
+        return jsonify({"error": "bpm must be a positive number"}), 400
+    updated = db.update_bpm(track_id, round(float(bpm), 2))
+    return jsonify({"ok": True, "updated": updated})
+
+
 @app.post("/api/track/<int:track_id>/played")
 def api_track_played(track_id):
     new_count, raw_path = db.increment_play_count(track_id)

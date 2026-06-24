@@ -88,11 +88,15 @@ def init_db():
                 value TEXT
             );
         """)
-        # Migration: add play_count to existing DBs (safe to run repeatedly)
-        try:
-            conn.execute("ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0")
-        except Exception:
-            pass  # column already exists
+        # Migrations (safe to run repeatedly)
+        for migration in [
+            "ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE tracks ADD COLUMN bpm REAL",
+        ]:
+            try:
+                conn.execute(migration)
+            except Exception:
+                pass
 
 
 def search_tracks(query="", genre=None, decade=None, fmt=None,
@@ -251,6 +255,16 @@ def get_random_tracks(count=25, exclude_ids=None):
         d["has_cover"] = bool(d["cover_hash"])
         tracks.append(d)
     return tracks
+
+
+def update_bpm(track_id: int, bpm: float) -> bool:
+    """Store BPM for a track. Returns True if the track was found and updated."""
+    with db() as conn:
+        cur = conn.execute(
+            "UPDATE tracks SET bpm=? WHERE id=? AND (bpm IS NULL OR bpm=0)",
+            (bpm, track_id)
+        )
+        return cur.rowcount > 0
 
 
 def get_scanner_status():
