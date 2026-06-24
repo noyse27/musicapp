@@ -173,6 +173,39 @@ def _collect_mp3s(root: str):
                 yield os.path.join(dirpath, fname)
 
 
+def _write_bpm_tag(path: str, bpm: float):
+    """Write BPM value into the file's tag (TBPM for MP3, BPM for FLAC/OGG, BPM for M4A)."""
+    ext = os.path.splitext(path)[1].lower()
+    bpm_str = str(int(round(bpm)))
+
+    if ext == ".mp3":
+        from mutagen.id3 import ID3, TBPM
+        try:
+            tags = ID3(path)
+        except Exception:
+            tags = ID3()
+        tags["TBPM"] = TBPM(encoding=3, text=bpm_str)
+        tags.save(path)
+
+    elif ext == ".flac":
+        from mutagen.flac import FLAC
+        audio = FLAC(path)
+        audio["BPM"] = [bpm_str]
+        audio.save()
+
+    elif ext in (".ogg", ".opus"):
+        from mutagen.oggvorbis import OggVorbis
+        audio = OggVorbis(path)
+        audio["BPM"] = [bpm_str]
+        audio.save()
+
+    elif ext in (".m4a", ".mp4", ".aac"):
+        from mutagen.mp4 import MP4
+        audio = MP4(path)
+        audio["tmpo"] = [int(round(bpm))]
+        audio.save()
+
+
 def run_bpm_scan(limit: int = 0):
     """Analyse BPM for all tracks that don't have one yet.
     Runs in background after the regular scan.
@@ -197,6 +230,14 @@ def run_bpm_scan(limit: int = 0):
                     y, sr = librosa.load(row["path"], mono=True, duration=60)
                     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
                     bpm = round(float(tempo), 2)
+
+                    # Write TBPM tag back into the file
+                    try:
+                        _write_bpm_tag(row["path"], bpm)
+                    except Exception as tag_err:
+                        log.debug("Could not write TBPM tag to %s: %s", row["path"], tag_err)
+
+                    # Save to DB
                     conn2 = get_connection()
                     try:
                         conn2.execute(
