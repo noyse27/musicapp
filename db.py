@@ -182,7 +182,8 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
 
         rows = conn.execute(
             f"""SELECT t.id, t.path, t.title, t.artist, t.album, t.genre,
-                       t.year, t.track_no, t.duration, t.bitrate, t.size, t.cover_hash
+                       t.year, t.track_no, t.duration, t.bitrate, t.size,
+                       t.cover_hash, t.bpm
                 FROM tracks t {where}
                 ORDER BY {order}
                 LIMIT ? OFFSET ?""",
@@ -231,7 +232,7 @@ def get_random_tracks(count=25, exclude_ids=None):
     with db() as conn:
         rows = conn.execute(
             f"""SELECT id, path, title, artist, album, genre, year, track_no,
-                       duration, bitrate, size, cover_hash
+                       duration, bitrate, size, cover_hash, bpm
                 FROM tracks
                 {"WHERE id NOT IN (" + ",".join("?"*len(excl)) + ")" if excl else ""}
                 ORDER BY RANDOM() LIMIT ?""",

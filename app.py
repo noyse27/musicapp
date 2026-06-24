@@ -458,6 +458,16 @@ def api_scan_start():
     return jsonify({"status": "started"})
 
 
+@app.post("/api/scan/bpm")
+def api_bpm_scan():
+    """Trigger background BPM analysis for tracks without BPM.
+    Optional JSON body: {"limit": 500} to cap the number analysed."""
+    data = request.get_json(silent=True) or {}
+    limit = int(data.get("limit", 0))
+    scanner.run_bpm_scan(limit)
+    return jsonify({"status": "started", "limit": limit or "unlimited"})
+
+
 @app.get("/api/scan/status")
 def api_scan_status():
     s = scanner.status()

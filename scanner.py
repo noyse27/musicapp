@@ -160,6 +160,50 @@ def _collect_mp3s(root: str):
                 yield os.path.join(dirpath, fname)
 
 
+def run_bpm_scan(limit: int = 0):
+    """Analyse BPM for all tracks that don't have one yet.
+    Runs in background after the regular scan.
+    limit=0 means no limit (scan all).
+    """
+    def _bpm_worker():
+        try:
+            import librosa
+            from db import get_connection
+            conn = get_connection()
+            try:
+                query = "SELECT id, path FROM tracks WHERE bpm IS NULL OR bpm = 0"
+                if limit:
+                    query += f" LIMIT {int(limit)}"
+                rows = conn.execute(query).fetchall()
+            finally:
+                conn.close()
+
+            log.info("BPM scan: %d tracks to analyse", len(rows))
+            for row in rows:
+                try:
+                    y, sr = librosa.load(row["path"], mono=True, duration=60)
+                    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+                    bpm = round(float(tempo), 2)
+                    conn2 = get_connection()
+                    try:
+                        conn2.execute(
+                            "UPDATE tracks SET bpm=? WHERE id=? AND (bpm IS NULL OR bpm=0)",
+                            (bpm, row["id"])
+                        )
+                        conn2.commit()
+                    finally:
+                        conn2.close()
+                except Exception as e:
+                    log.debug("BPM failed for %s: %s", row["path"], e)
+        except ImportError:
+            log.warning("librosa not installed — BPM scan skipped")
+        except Exception as e:
+            log.error("BPM scan error: %s", e)
+
+    t = threading.Thread(target=_bpm_worker, daemon=True)
+    t.start()
+
+
 def run_scan(music_root: str):
     if _status["running"]:
         return
@@ -203,6 +247,8 @@ def run_scan(music_root: str):
             log.error("Scanner error: %s", e)
         finally:
             _update(running=False, finished_at=time.time(), current_file="")
+            # Kick off background BPM analysis for new tracks
+            run_bpm_scan()
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
