@@ -79,6 +79,16 @@
       color: var(--text-primary);
     }
     #topbar-logo img { border-radius: 4px; }
+    #btn-about {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-tertiary); font-size: 13px; font-weight: 700;
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 1.5px solid var(--text-tertiary);
+      display: flex; align-items: center; justify-content: center;
+      padding: 0; line-height: 1; margin-left: 4px; flex-shrink: 0;
+      opacity: 0.5; transition: opacity .15s;
+    }
+    #btn-about:hover { opacity: 1; }
     #topbar-logo span {
       font-family: "Orbitron", sans-serif;
       font-size: 17px;
@@ -227,6 +237,15 @@
       transition: background .1s;
     }
     #btn-scan:hover { background: var(--bg-secondary); }
+    #btn-bpm-tag, #btn-bpm-calc {
+      display: flex; align-items: center; gap: 6px;
+      width: 100%; padding: 6px 10px; margin-top: 6px;
+      background: transparent; border: 0.5px solid var(--border-medium);
+      border-radius: 6px; font-size: var(--text-base);
+      color: var(--text-secondary); cursor: pointer; transition: background .1s;
+    }
+    #btn-bpm-tag:hover, #btn-bpm-calc:hover { background: var(--bg-secondary); }
+    #btn-bpm-tag.running, #btn-bpm-calc.running { color: var(--accent); }
 
     /* ── Content area ─────────────────────────────────── */
     #content {
@@ -760,6 +779,7 @@
   <div id="topbar-logo">
     <img src="/static/logo.svg" width="28" height="28" alt="Adolar">
     <span>Adolar</span>
+    <button id="btn-about" title="Über Adolar" onclick="document.getElementById('about-modal').style.display='flex'">?</button>
   </div>
   <div id="topbar-meta">Lade…</div>
   <div id="lastfm-status" style="flex-shrink:0;display:flex;align-items:center;gap:8px;font-size:var(--text-sm);color:var(--text-tertiary)"></div>
@@ -898,6 +918,14 @@
       <button id="btn-scan">
         <i class="ti ti-refresh"></i>
         Bibliothek scannen
+      </button>
+      <button id="btn-bpm-tag" title="BPM aus Datei-Tags lesen und DB aktualisieren (schnell)">
+        <i class="ti ti-music-bolt"></i>
+        BPM-Tags einlesen
+      </button>
+      <button id="btn-bpm-calc" title="BPM für Tracks ohne Tag per librosa berechnen (langsam)">
+        <i class="ti ti-waveform"></i>
+        BPM berechnen
       </button>
     </div>
 
@@ -2121,6 +2149,34 @@ $("btn-scan").onclick = async () => {
   startScanPolling();
 };
 
+$("btn-bpm-tag").onclick = async () => {
+  const btn = $("btn-bpm-tag");
+  btn.classList.add("running");
+  btn.innerHTML = '<i class="ti ti-loader"></i> Lese Tags…';
+  try {
+    const r = await fetch(`${API}/api/scan/bpm-tags`, { method: "POST" });
+    const d = await r.json();
+    showBanner(`BPM-Tags gelesen: ${d.updated} aktualisiert`);
+    setTimeout(hideBanner, 4000);
+  } catch(e) { showBanner("Fehler beim Tag-Lesen"); setTimeout(hideBanner, 3000); }
+  btn.classList.remove("running");
+  btn.innerHTML = '<i class="ti ti-music-bolt"></i> BPM-Tags einlesen';
+};
+
+$("btn-bpm-calc").onclick = async () => {
+  const btn = $("btn-bpm-calc");
+  btn.classList.add("running");
+  btn.innerHTML = '<i class="ti ti-loader"></i> Starte…';
+  try {
+    const r = await fetch(`${API}/api/scan/bpm`, { method: "POST" });
+    const d = await r.json();
+    showBanner("BPM-Berechnung läuft im Hintergrund…");
+    setTimeout(hideBanner, 5000);
+  } catch(e) { showBanner("Fehler"); setTimeout(hideBanner, 3000); }
+  btn.classList.remove("running");
+  btn.innerHTML = '<i class="ti ti-waveform"></i> BPM berechnen';
+};
+
 function showBanner(text) {
   $("scan-banner").style.display = "flex";
   $("scan-banner-text").textContent = text;
@@ -2186,5 +2242,17 @@ setInterval(loadStats, 60000);
   }
 })();
 </script>
+
+<div id="about-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:32px 40px;min-width:280px;text-align:center;position:relative">
+    <button onclick="document.getElementById('about-modal').style.display='none'" style="position:absolute;top:10px;right:14px;background:none;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    <img src="/static/logo.svg" width="48" height="48" alt="Adolar" style="margin-bottom:12px">
+    <div style="font-family:'Orbitron',sans-serif;font-size:1.3rem;font-weight:700;color:var(--accent);margin-bottom:4px">Adolar</div>
+    <div style="color:var(--text-secondary);font-size:var(--text-sm);margin-bottom:16px">Version v0.8</div>
+    <div style="color:var(--text-secondary);font-size:var(--text-sm);margin-bottom:8px">(c) PolzeSoft 2026</div>
+    <a href="https://polze.net" target="_blank" style="color:var(--accent);font-size:var(--text-sm);display:block;margin-bottom:4px">https://polze.net</a>
+    <a href="mailto:adolar@polze.net" style="color:var(--accent);font-size:var(--text-sm)">adolar@polze.net</a>
+  </div>
+</div>
 </body>
 </html>

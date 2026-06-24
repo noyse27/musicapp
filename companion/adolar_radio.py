@@ -52,12 +52,58 @@ SETTINGS_HTML = """<!DOCTYPE html>
   button:hover { background: #9E98E8; }
   .hint { font-size: 11px; color: #5C5C58; margin-top: 12px; text-align: center; line-height: 1.5; }
   .error { color: #e03e3e; font-size: 12px; margin-top: 8px; display: none; }
+  .btn-about {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid #9A9A96; background: none;
+    color: #9A9A96; font-size: 12px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    padding: 0; line-height: 1; margin-left: 4px; opacity: 0.5;
+    transition: opacity .15s; flex-shrink: 0;
+  }
+  .btn-about:hover { opacity: 1; background: none; }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    align-items: center; justify-content: center; z-index: 999;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: #2A2A28; border: 1px solid #444; border-radius: 12px;
+    padding: 32px 40px; min-width: 260px; text-align: center; position: relative;
+  }
+  .modal-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none; color: #9A9A96;
+    font-size: 18px; cursor: pointer; width: auto; padding: 0;
+  }
+  .modal-close:hover { background: none; color: #ECECEC; }
+  .modal-name {
+    font-family: "Orbitron", monospace; font-size: 1.2rem; font-weight: 700;
+    background: linear-gradient(135deg, #7F77DD, #b8b4f0);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 4px;
+  }
+  .modal-sub { color: #9A9A96; font-size: 12px; margin-bottom: 8px; }
+  .modal-link { color: #7F77DD; font-size: 12px; display: block; margin-top: 4px; text-decoration: none; }
+  .modal-link:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 <div class="logo">
   <img src="data:image/svg+xml;base64,{LOGO_B64}" alt="Adolar">
   <span>Adolar</span>
+  <button class="btn-about" onclick="document.getElementById('about-modal').classList.add('open')">?</button>
+</div>
+
+<div class="modal-overlay" id="about-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('about-modal').classList.remove('open')">✕</button>
+    <img src="data:image/svg+xml;base64,{LOGO_B64}" width="48" height="48" alt="Adolar" style="margin-bottom:12px">
+    <div class="modal-name">AdolarRadio</div>
+    <div class="modal-sub">Version v0.8</div>
+    <div class="modal-sub">(c) PolzeSoft 2026</div>
+    <a class="modal-link" href="https://polze.net">https://polze.net</a>
+    <a class="modal-link" href="mailto:adolar@polze.net">adolar@polze.net</a>
+  </div>
 </div>
 <div style="width:100%;max-width:280px">
   <label>Adolar Server URL</label>

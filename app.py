@@ -458,6 +458,35 @@ def api_scan_start():
     return jsonify({"status": "started"})
 
 
+@app.post("/api/scan/bpm-tags")
+def api_bpm_tags():
+    """Read BPM from file tags (TBPM etc.) and update DB — fast, no audio analysis."""
+    import threading
+    def _worker():
+        updated = 0
+        try:
+            from db import get_connection
+            conn = get_connection()
+            rows = conn.execute("SELECT id, path FROM tracks").fetchall()
+            conn.close()
+            for row in rows:
+                try:
+                    bpm = scanner._read_bpm_tag(row["path"])
+                    if bpm and bpm > 0:
+                        c = get_connection()
+                        c.execute("UPDATE tracks SET bpm=? WHERE id=?", (bpm, row["id"]))
+                        c.commit()
+                        c.close()
+                        updated += 1
+                except Exception:
+                    pass
+        except Exception as e:
+            import logging; logging.getLogger(__name__).error("bpm-tags: %s", e)
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return jsonify({"status": "started", "updated": 0, "note": "running in background"})
+
+
 @app.post("/api/scan/bpm")
 def api_bpm_scan():
     """Trigger background BPM analysis for tracks without BPM.

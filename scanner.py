@@ -173,6 +173,27 @@ def _collect_mp3s(root: str):
                 yield os.path.join(dirpath, fname)
 
 
+def _read_bpm_tag(path: str) -> float | None:
+    """Read BPM from file tag without full scan. Returns None if not found."""
+    try:
+        audio = MutagenFile(path, easy=False)
+        if audio is None:
+            return None
+        tags = audio.tags or {}
+        for key in ("TBPM", "BPM", "bpm", "----:com.apple.iTunes:BPM"):
+            raw = tags.get(key)
+            if raw:
+                try:
+                    val = round(float(str(raw[0]).strip()), 2)
+                    if val > 0:
+                        return val
+                except (ValueError, TypeError):
+                    pass
+    except Exception:
+        pass
+    return None
+
+
 def _write_bpm_tag(path: str, bpm: float):
     """Write BPM value into the file's tag (TBPM for MP3, BPM for FLAC/OGG, BPM for M4A)."""
     ext = os.path.splitext(path)[1].lower()
