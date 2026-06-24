@@ -110,6 +110,18 @@ def _scan_file(path: str) -> dict | None:
                     pass
             return None
 
+        # Read BPM from tag (TBPM for MP3, FMPS_RATING/BPM for others)
+        bpm = None
+        for bpm_key in ("TBPM", "BPM", "bpm", "----:com.apple.iTunes:BPM"):
+            raw = tags.get(bpm_key)
+            if raw:
+                try:
+                    bpm = round(float(str(raw[0]).strip()), 2)
+                    if bpm > 0:
+                        break
+                except (ValueError, TypeError):
+                    pass
+
         cover_hash, cover_data, cover_mime = _extract_cover(audio)
         if cover_hash and cover_data:
             save_cover(cover_hash, cover_data, cover_mime)
@@ -144,6 +156,7 @@ def _scan_file(path: str) -> dict | None:
             "bitrate": bitrate,
             "size": stat.st_size,
             "cover_hash": cover_hash,
+            "bpm": bpm,
             "mtime": stat.st_mtime,
             "play_count": play_count,
         }

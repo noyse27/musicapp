@@ -276,19 +276,21 @@ def get_scanner_status():
 
 def upsert_track(data: dict):
     data.setdefault("play_count", 0)
+    data.setdefault("bpm", None)
     with db() as conn:
         conn.execute("""
             INSERT INTO tracks (path, title, artist, album, genre, year, track_no,
-                                duration, bitrate, size, cover_hash, mtime, play_count)
+                                duration, bitrate, size, cover_hash, bpm, mtime, play_count)
             VALUES (:path, :title, :artist, :album, :genre, :year, :track_no,
-                    :duration, :bitrate, :size, :cover_hash, :mtime, :play_count)
+                    :duration, :bitrate, :size, :cover_hash, :bpm, :mtime, :play_count)
             ON CONFLICT(path) DO UPDATE SET
                 title=excluded.title, artist=excluded.artist, album=excluded.album,
                 genre=excluded.genre, year=excluded.year, track_no=excluded.track_no,
                 duration=excluded.duration, bitrate=excluded.bitrate, size=excluded.size,
                 cover_hash=excluded.cover_hash, mtime=excluded.mtime,
                 indexed_at=unixepoch(),
-                play_count=MAX(play_count, excluded.play_count)
+                play_count=MAX(play_count, excluded.play_count),
+                bpm=CASE WHEN excluded.bpm IS NOT NULL THEN excluded.bpm ELSE bpm END
         """, data)
 
 
