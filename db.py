@@ -110,10 +110,12 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
     conditions = []
 
     if query:
+        # Each word gets its own prefix wildcard: "extreme clubhits" → "extreme* clubhits*"
+        fts_query = " ".join(w + "*" for w in query.split() if w)
         conditions.append(
             "t.id IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?)"
         )
-        params.append(query + "*")
+        params.append(fts_query)
 
     if genre:
         conditions.append("t.genre = ?")

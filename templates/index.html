@@ -2147,7 +2147,7 @@ $("sl-year-max").oninput = function() {
 let searchTimer;
 $("search").oninput = e => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => { state.query = e.target.value.trim(); loadTracks(1); }, 300);
+  searchTimer = setTimeout(() => { state.query = e.target.value.trim(); loadTracks(1); }, 500);
 };
 $("sort-select").onchange = e => { state.sort = e.target.value; loadTracks(1); };
 
