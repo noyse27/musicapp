@@ -72,19 +72,22 @@ def api_search():
     min_bitrate = request.args.get("min_bitrate") or None
     year_min    = request.args.get("year_min") or None
     year_max    = request.args.get("year_max") or None
+    bpm_min     = request.args.get("bpm_min") or None
+    bpm_max     = request.args.get("bpm_max") or None
     artist_letter = request.args.get("artist_letter") or None
     title_letter  = request.args.get("title_letter") or None
     page     = _int_arg("page",     1,   min_val=1)
     per_page = _int_arg("per_page", 50,  min_val=1, max_val=200)
     sort     = request.args.get("sort", "artist")
 
-    # Validate numeric filter params
     try:
         if min_dur:     min_dur     = int(min_dur)
         if max_dur:     max_dur     = int(max_dur)
         if min_bitrate: min_bitrate = int(min_bitrate)
         if year_min:    year_min    = int(year_min)
         if year_max:    year_max    = int(year_max)
+        if bpm_min:     bpm_min     = float(bpm_min)
+        if bpm_max:     bpm_max     = float(bpm_max)
     except ValueError:
         return jsonify({"error": "invalid numeric parameter"}), 400
 
@@ -92,6 +95,7 @@ def api_search():
         query=q, genre=genre, decade=decade, fmt=fmt,
         min_dur=min_dur, max_dur=max_dur, min_bitrate=min_bitrate,
         year_min=year_min, year_max=year_max,
+        bpm_min=bpm_min, bpm_max=bpm_max,
         artist_letter=artist_letter, title_letter=title_letter,
         page=page, per_page=per_page, sort=sort,
     )

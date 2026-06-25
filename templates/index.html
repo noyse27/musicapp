@@ -472,6 +472,13 @@
       color: var(--text-tertiary);
       font-variant-numeric: tabular-nums;
     }
+    .track-bpm {
+      font-size: var(--text-xs);
+      color: var(--accent);
+      opacity: 0.7;
+      font-variant-numeric: tabular-nums;
+    }
+    .track-bpm::after { content: " BPM"; }
 
     /* Inline play button */
     .track-play-btn {
@@ -910,6 +917,24 @@
           <label>Min</label>
           <input type="range" id="sl-bitrate" min="0" max="320" step="32" value="0">
           <span class="slider-val" id="sl-bitrate-val">–</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">BPM</span>
+      <div class="slider-row">
+        <div class="slider-item">
+          <label>Min</label>
+          <input type="range" id="sl-bpm-min" min="0" max="200" step="5" value="0"
+                 oninput="onBpmChange()">
+          <span class="slider-val" id="sl-bpm-min-val">–</span>
+        </div>
+        <div class="slider-item">
+          <label>Max</label>
+          <input type="range" id="sl-bpm-max" min="0" max="200" step="5" value="0"
+                 oninput="onBpmChange()">
+          <span class="slider-val" id="sl-bpm-max-val">–</span>
         </div>
       </div>
     </div>
@@ -1368,6 +1393,8 @@ async function loadTracks(page = 1) {
   if (state.filters.min_bitrate > 0) p.set("min_bitrate", state.filters.min_bitrate);
   if (state.filters.year_min > 0)    p.set("year_min",    state.filters.year_min);
   if (state.filters.year_max > 0)    p.set("year_max",    state.filters.year_max);
+  if (state.filters.bpm_min > 0)     p.set("bpm_min",     state.filters.bpm_min);
+  if (state.filters.bpm_max > 0)     p.set("bpm_max",     state.filters.bpm_max);
   if (state.filters.artist_letter)   p.set("artist_letter", state.filters.artist_letter);
   if (state.filters.title_letter)    p.set("title_letter",  state.filters.title_letter);
 
@@ -1424,7 +1451,9 @@ function renderTracks() {
     // Meta
     const meta = document.createElement("div");
     meta.className = "track-meta";
+    const bpmStr = track.bpm ? `<span class="track-bpm" title="BPM">${Math.round(track.bpm)}</span>` : '';
     meta.innerHTML = `<span class="format-badge">${esc(track.format)}</span>
+                      ${bpmStr}
                       <span class="track-dur">${track.duration_fmt || fmt(track.duration)}</span>`;
     row.appendChild(meta);
 
@@ -2087,6 +2116,16 @@ $("sl-bitrate").oninput = function() {
   $("sl-bitrate-val").textContent = v > 0 ? v + " kbps" : "–";
   loadTracks(1);
 };
+
+function onBpmChange() {
+  const minV = +$("sl-bpm-min").value;
+  const maxV = +$("sl-bpm-max").value;
+  state.filters.bpm_min = minV;
+  state.filters.bpm_max = maxV;
+  $("sl-bpm-min-val").textContent = minV > 0 ? minV + " BPM" : "–";
+  $("sl-bpm-max-val").textContent = maxV > 0 ? maxV + " BPM" : "–";
+  loadTracks(1);
+}
 
 const YEAR_MIN = 1950, YEAR_MAX = 2025;
 $("sl-year-min").oninput = function() {

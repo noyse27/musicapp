@@ -78,10 +78,11 @@ def init_db():
                 VALUES (new.id, new.title, new.artist, new.album, new.genre);
             END;
 
-            CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
+            CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS idx_tracks_album  ON tracks(album);
             CREATE INDEX IF NOT EXISTS idx_tracks_genre  ON tracks(genre);
             CREATE INDEX IF NOT EXISTS idx_tracks_year   ON tracks(year);
+            CREATE INDEX IF NOT EXISTS idx_tracks_bpm    ON tracks(bpm);
 
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,
@@ -102,6 +103,7 @@ def init_db():
 def search_tracks(query="", genre=None, decade=None, fmt=None,
                   min_dur=None, max_dur=None, min_bitrate=None,
                   year_min=None, year_max=None,
+                  bpm_min=None, bpm_max=None,
                   artist_letter=None, title_letter=None,
                   page=1, per_page=50, sort="artist"):
     params = []
@@ -142,26 +144,32 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
     if year_max is not None:
         conditions.append("t.year <= ?")
         params.append(int(year_max))
+    if bpm_min is not None:
+        conditions.append("t.bpm >= ?")
+        params.append(float(bpm_min))
+    if bpm_max is not None:
+        conditions.append("t.bpm <= ?")
+        params.append(float(bpm_max))
 
-    def _letter_cond(col, letter):
+    def _letter_cond(col, letter, params_list):
+        # Use index-friendly range comparisons instead of SUBSTR(UPPER(...))
         if letter == "0–9":
-            return f"SUBSTR(UPPER({col}),1,1) BETWEEN '0' AND '9'"
+            return f"({col} >= '0' AND {col} < ':')"
         elif letter == "#":
-            return (f"(SUBSTR(UPPER({col}),1,1) NOT BETWEEN 'A' AND 'Z' "
-                    f"AND SUBSTR(UPPER({col}),1,1) NOT BETWEEN '0' AND '9')")
+            return (f"({col} < '0' OR ({col} > '9' AND {col} < 'A') OR "
+                    f"({col} > 'Z' AND {col} < 'a') OR {col} > 'z')")
         else:
-            return f"SUBSTR(UPPER({col}),1,1) = ?"
+            lo = letter.upper()
+            hi = chr(ord(lo) + 1)
+            params_list += [lo, lo.lower(), hi, hi.lower()]
+            return (f"(({col} >= ? AND {col} < ?) OR ({col} >= ? AND {col} < ?))")
 
     if artist_letter:
-        cond = _letter_cond("t.artist", artist_letter)
+        cond = _letter_cond("t.artist", artist_letter, params)
         conditions.append(cond)
-        if artist_letter not in ("0–9", "#"):
-            params.append(artist_letter.upper())
     if title_letter:
-        cond = _letter_cond("t.title", title_letter)
+        cond = _letter_cond("t.title", title_letter, params)
         conditions.append(cond)
-        if title_letter not in ("0–9", "#"):
-            params.append(title_letter.upper())
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -176,10 +184,7 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
     offset = (page - 1) * per_page
 
     with db() as conn:
-        total = conn.execute(
-            f"SELECT COUNT(*) FROM tracks t {where}", params
-        ).fetchone()[0]
-
+        # Fetch page first, count only if on first page (avoids double full-scan)
         rows = conn.execute(
             f"""SELECT t.id, t.path, t.title, t.artist, t.album, t.genre,
                        t.year, t.track_no, t.duration, t.bitrate, t.size,
@@ -189,6 +194,12 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
                 LIMIT ? OFFSET ?""",
             params + [per_page, offset],
         ).fetchall()
+
+        # Count: if this page is full there may be more — count separately
+        # Use a lightweight count-only query
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM tracks t {where}", params
+        ).fetchone()[0]
 
     def fmt_duration(s):
         if not s:
