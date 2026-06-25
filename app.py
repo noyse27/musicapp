@@ -20,6 +20,18 @@ CORS(app, origins=_cors_origins.split() if _cors_origins else [])
 MUSIC_ROOT = os.environ.get("MUSIC_ROOT", "/music")
 MAX_DOWNLOAD_IDS = int(os.environ.get("MAX_DOWNLOAD_IDS", 500))
 
+# ── Adolar Disco connection tracking ─────────────────────────────────────────
+import time as _time
+_disco_last_seen: float = 0   # epoch seconds
+_DISCO_TIMEOUT = 120          # seconds until considered disconnected
+
+def _touch_disco():
+    global _disco_last_seen
+    _disco_last_seen = _time.time()
+
+def _disco_active() -> bool:
+    return (_time.time() - _disco_last_seen) < _DISCO_TIMEOUT
+
 
 def _safe_path(path: str) -> str | None:
     """Resolve path and verify it stays within MUSIC_ROOT. Returns None if outside."""
@@ -121,7 +133,18 @@ def api_stats():
     stats = db.get_stats()
     sc = scanner.status()
     stats["last_scan"] = sc.get("finished_at")
+    stats["disco_active"] = _disco_active()
     return jsonify(stats)
+
+
+@app.get("/api/disco-status")
+def api_disco_status():
+    """Lightweight endpoint polled by the UI to show Disco connection badge."""
+    _touch_disco()  # also counts as a keepalive if Disco calls this
+    return jsonify({
+        "active": _disco_active(),
+        "last_seen": _disco_last_seen or None,
+    })
 
 
 # ── Cover art ─────────────────────────────────────────────────────────────────
@@ -142,6 +165,7 @@ def api_cover(hash_):
 
 @app.get("/api/stream/<int:track_id>")
 def api_stream(track_id):
+    _touch_disco()
     with db.db() as conn:
         row = conn.execute(
             "SELECT path FROM tracks WHERE id = ?", (track_id,)
@@ -331,6 +355,7 @@ def _write_play_count_tag(path: str, count: int):
 
 @app.get("/api/random")
 def api_random():
+    _touch_disco()
     count   = min(int(request.args.get("count", 25)), 100)
     exclude = [int(x) for x in request.args.getlist("exclude") if x.isdigit()]
     return jsonify(db.get_random_tracks(count, exclude))

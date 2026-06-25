@@ -116,6 +116,10 @@
       gap: 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes discoPulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.5; }
+    }
     #scan-spinner { display: inline-block; animation: spin 1.2s linear infinite; }
 
     /* ── Body row (sidebar + content) ───────────────────── */
@@ -787,6 +791,13 @@
     <img src="/static/logo.svg" width="28" height="28" alt="Adolar">
     <span>Adolar</span>
     <button id="btn-about" title="Über Adolar" onclick="document.getElementById('about-modal').style.display='flex'">?</button>
+    <span id="disco-badge" title="Adolar Disco verbunden"
+          style="display:none;font-size:11px;background:rgba(127,119,221,0.2);
+                 color:#A09AFF;border:1px solid rgba(127,119,221,0.4);
+                 border-radius:99px;padding:2px 8px;margin-left:4px;
+                 animation:discoPulse 2s ease-in-out infinite">
+      🪩 Disco
+    </span>
   </div>
   <div id="topbar-meta">Lade…</div>
   <div id="lastfm-status" style="flex-shrink:0;display:flex;align-items:center;gap:8px;font-size:var(--text-sm);color:var(--text-tertiary)"></div>
@@ -2276,6 +2287,19 @@ function startScanPolling() {
 
 // Stats alle 60 Sek. im Hintergrund aktualisieren
 setInterval(loadStats, 60000);
+
+// ── Disco-Badge ─────────────────────────────────────────────
+async function checkDiscoBadge() {
+  try {
+    const r = await fetch(`${API}/api/disco-status`);
+    const d = await r.json();
+    $("disco-badge").style.display = d.active ? "inline" : "none";
+  } catch(e) {
+    $("disco-badge").style.display = "none";
+  }
+}
+checkDiscoBadge();
+setInterval(checkDiscoBadge, 30000);
 
 // ── Init ───────────────────────────────────────────────────
 (async () => {
