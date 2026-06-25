@@ -1380,10 +1380,13 @@ function makeCover(track, size = 42) {
 }
 
 // ── Fetch ─────────────────────────────────────────────────
-async function loadTracks(page = 1) {
+async function loadTracks(page = 1, forceCount = false) {
   if (radio.active) return;
+  // Skip COUNT if we already have the total and are just paging
+  const needCount = page === 1 || forceCount || state.total === 0;
   state.page = page;
   const p = new URLSearchParams({ page, per_page: 50, sort: state.sort });
+  if (!needCount) p.set("count", "0");
   if (state.query)              p.set("q", state.query);
   if (state.filters.genre)      p.set("genre",   state.filters.genre);
   if (state.filters.decade)     p.set("decade",  state.filters.decade);
@@ -1410,8 +1413,14 @@ async function loadTracks(page = 1) {
   }
 
   state.tracks = data.results;
-  state.total  = data.total;
-  state.pages  = data.pages;
+  // Preserve cached total when not recounting
+  if (needCount) {
+    state.total = data.total;
+    state.pages = data.pages;
+  } else {
+    // Recalculate pages from cached total
+    state.pages = Math.max(1, Math.ceil(state.total / 50));
+  }
 
   renderTracks();
   renderPagination();

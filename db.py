@@ -105,7 +105,8 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
                   year_min=None, year_max=None,
                   bpm_min=None, bpm_max=None,
                   artist_letter=None, title_letter=None,
-                  page=1, per_page=50, sort="artist"):
+                  page=1, per_page=50, sort="artist",
+                  count=True):
     params = []
     conditions = []
 
@@ -186,7 +187,6 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
     offset = (page - 1) * per_page
 
     with db() as conn:
-        # Fetch page first, count only if on first page (avoids double full-scan)
         rows = conn.execute(
             f"""SELECT t.id, t.path, t.title, t.artist, t.album, t.genre,
                        t.year, t.track_no, t.duration, t.bitrate, t.size,
@@ -197,11 +197,14 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
             params + [per_page, offset],
         ).fetchall()
 
-        # Count: if this page is full there may be more — count separately
-        # Use a lightweight count-only query
-        total = conn.execute(
-            f"SELECT COUNT(*) FROM tracks t {where}", params
-        ).fetchone()[0]
+        if count:
+            # Full count only when requested (first page or filter change)
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM tracks t {where}", params
+            ).fetchone()[0]
+        else:
+            # Estimate: if we got a full page there are more; otherwise offset+len
+            total = offset + len(rows) + (1 if len(rows) == per_page else 0)
 
     def fmt_duration(s):
         if not s:

@@ -79,6 +79,7 @@ def api_search():
     page     = _int_arg("page",     1,   min_val=1)
     per_page = _int_arg("per_page", 50,  min_val=1, max_val=200)
     sort     = request.args.get("sort", "artist")
+    do_count = request.args.get("count", "1") != "0"
 
     try:
         if min_dur:     min_dur     = int(min_dur)
@@ -97,7 +98,7 @@ def api_search():
         year_min=year_min, year_max=year_max,
         bpm_min=bpm_min, bpm_max=bpm_max,
         artist_letter=artist_letter, title_letter=title_letter,
-        page=page, per_page=per_page, sort=sort,
+        page=page, per_page=per_page, sort=sort, count=do_count,
     )
     return jsonify({
         "total": total,
