@@ -149,7 +149,9 @@ def api_disco_status():
 
 # ── Cover art ─────────────────────────────────────────────────────────────────
 
-_THUMB_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.cache"), "adolar_thumbs")
+# Store thumbnails next to the DB so they survive container restarts
+_db_dir = os.path.dirname(os.environ.get("DB_PATH", "") or os.path.expanduser("~/.cache/adolar.db"))
+_THUMB_DIR = os.path.join(_db_dir, "thumbs")
 _THUMB_SIZE = (80, 80)
 
 def _thumb_path(hash_: str) -> str:
