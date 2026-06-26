@@ -1841,10 +1841,11 @@ audio.ontimeupdate = () => {
     const remaining = audio.duration - audio.currentTime;
     const next = radio.queue[1];
     if (next) {
-      // Preload next track early so it's buffered before crossfade
+      // Only crossfade if track is long enough (skip CF for short tracks)
+      const trackDur = audio.duration || 0;
+      const cfEnabled = trackDur > CF_OUT + 2; // need at least CF_OUT+2s
       if (!radio.cfActive && remaining <= CF_PRELOAD) preloadNext(next.id);
-      // Start crossfade
-      if (!radio.cfActive && remaining <= CF_OUT) startCrossfade();
+      if (!radio.cfActive && cfEnabled && remaining <= CF_OUT) startCrossfade();
     }
   }
 };
