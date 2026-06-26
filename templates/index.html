@@ -1453,7 +1453,7 @@ async function loadTracks(page = 1, forceCount = false) {
   renderPagination();
 
   // Scroll to top of results
-  document.getElementById('content')?.scrollTo({ top: 0, behavior: 'instant' });
+  document.getElementById('track-list')?.scrollTo({ top: 0, behavior: 'instant' });
 
   const q = state.query;
   $("result-count").textContent = q
