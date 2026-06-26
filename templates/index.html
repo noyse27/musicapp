@@ -1379,42 +1379,21 @@ function makePlaceholder(track, size) {
   return div;
 }
 
-let _coverQueue = [];
-let _coverTimer = null;
-
 function makeCover(track, size = 42) {
-  // Always show placeholder immediately; swap to image in background
-  const placeholder = makePlaceholder(track, size);
-  if (!track.has_cover) return placeholder;
+  if (!track.has_cover) return makePlaceholder(track, size);
 
   const img = document.createElement("img");
   img.className = "track-cover";
-  img.loading = "lazy";
+  img.loading  = "lazy";
   img.decoding = "async";
   img.width = size; img.height = size;
-  img.style.display = "none";   // hidden until loaded
-  img.onerror = () => { img.remove(); };
-  img.onload  = () => {
-    placeholder.replaceWith(img);
-    img.style.display = "";
-  };
-  // Queue the src assignment to stagger requests (max 6 at a time)
-  _coverQueue.push({ img, hash: track.cover_hash });
-  if (!_coverTimer) _coverTimer = setTimeout(_drainCoverQueue, 0);
-
-  // Return placeholder for now; img will swap in when loaded
-  return placeholder;
-}
-
-function _drainCoverQueue() {
-  _coverTimer = null;
-  const batch = _coverQueue.splice(0, 6);   // 6 = browser parallel limit
-  batch.forEach(({ img, hash }) => {
-    img.src = `${API}/api/cover/${hash}`;
-  });
-  if (_coverQueue.length > 0) {
-    _coverTimer = setTimeout(_drainCoverQueue, 80);  // next batch after 80ms
-  }
+  // Show colored initial placeholder as CSS background while image loads
+  img.style.cssText = `background:${artistColor(track.artist)};color:transparent`;
+  img.alt = initials(track.artist);
+  img.onerror = () => img.replaceWith(makePlaceholder(track, size));
+  img.onload  = () => { img.style.background = ""; img.alt = ""; };
+  img.src = `${API}/api/cover/${track.cover_hash}`;
+  return img;
 }
 
 // ── Fetch ─────────────────────────────────────────────────
