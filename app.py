@@ -149,13 +149,51 @@ def api_disco_status():
 
 # ── Cover art ─────────────────────────────────────────────────────────────────
 
+_THUMB_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.cache"), "adolar_thumbs")
+_THUMB_SIZE = (80, 80)
+
+def _thumb_path(hash_: str) -> str:
+    return os.path.join(_THUMB_DIR, f"{hash_}.webp")
+
+def _make_thumb(data: bytes) -> bytes | None:
+    try:
+        from PIL import Image
+        import io as _io
+        img = Image.open(_io.BytesIO(data))
+        img.thumbnail(_THUMB_SIZE, Image.LANCZOS)
+        buf = _io.BytesIO()
+        img.save(buf, format="WEBP", quality=75, method=4)
+        return buf.getvalue()
+    except Exception:
+        return None
+
+
 @app.get("/api/cover/<hash_>")
 def api_cover(hash_):
+    # Serve cached thumbnail if available
+    tp = _thumb_path(hash_)
+    if os.path.exists(tp):
+        resp = send_file(tp, mimetype="image/webp", max_age=86400 * 365)
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        resp.headers["ETag"] = f'"{hash_}"'
+        return resp
+
+    # Generate thumbnail from DB blob
     data, mime = db.get_cover(hash_)
     if data is None:
         abort(404)
-    import io
-    resp = send_file(io.BytesIO(data), mimetype=mime, max_age=86400 * 365)
+
+    thumb = _make_thumb(data)
+    if thumb:
+        os.makedirs(_THUMB_DIR, exist_ok=True)
+        with open(tp, "wb") as f:
+            f.write(thumb)
+        import io
+        resp = send_file(io.BytesIO(thumb), mimetype="image/webp", max_age=86400 * 365)
+    else:
+        import io
+        resp = send_file(io.BytesIO(data), mimetype=mime, max_age=86400 * 365)
+
     resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     resp.headers["ETag"] = f'"{hash_}"'
     return resp
