@@ -227,6 +227,44 @@ def _write_bpm_tag(path: str, bpm: float):
         audio.save()
 
 
+def run_thumb_generation():
+    """Generate missing cover thumbnails in the background after a scan."""
+    def _worker():
+        try:
+            import io as _io, os as _os
+            from PIL import Image
+            from db import get_connection
+            from app import _THUMB_DIR, _THUMB_SIZE, _thumb_path
+
+            conn = get_connection()
+            rows = conn.execute("SELECT hash, data, mime FROM covers").fetchall()
+            conn.close()
+
+            _os.makedirs(_THUMB_DIR, exist_ok=True)
+            generated = 0
+            for row in rows:
+                tp = _thumb_path(row["hash"])
+                if _os.path.exists(tp):
+                    continue
+                try:
+                    img = Image.open(_io.BytesIO(row["data"]))
+                    img.thumbnail(_THUMB_SIZE, Image.LANCZOS)
+                    with open(tp, "wb") as f:
+                        img_buf = _io.BytesIO()
+                        img.save(img_buf, format="WEBP", quality=75, method=4)
+                        f.write(img_buf.getvalue())
+                    generated += 1
+                except Exception as e:
+                    log.debug("Thumb failed for %s: %s", row["hash"], e)
+
+            log.info("Thumbnail generation: %d generated", generated)
+        except Exception as e:
+            log.error("Thumbnail generation failed: %s", e)
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
 def run_bpm_scan(limit: int = 0):
     """Analyse BPM for all tracks that don't have one yet.
     Runs in background after the regular scan.
@@ -324,6 +362,8 @@ def run_scan(music_root: str):
             _update(running=False, finished_at=time.time(), current_file="")
             # Kick off background BPM analysis for new tracks
             run_bpm_scan()
+            # Generate missing cover thumbnails in background
+            run_thumb_generation()
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
