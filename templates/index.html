@@ -1384,14 +1384,9 @@ function makeCover(track, size = 42) {
 
   const img = document.createElement("img");
   img.className = "track-cover";
-  img.loading  = "lazy";
   img.decoding = "async";
   img.width = size; img.height = size;
-  // Show colored initial placeholder as CSS background while image loads
-  img.style.cssText = `background:${artistColor(track.artist)};color:transparent`;
-  img.alt = initials(track.artist);
   img.onerror = () => img.replaceWith(makePlaceholder(track, size));
-  img.onload  = () => { img.style.background = ""; img.alt = ""; };
   img.src = `${API}/api/cover/${track.cover_hash}`;
   return img;
 }
