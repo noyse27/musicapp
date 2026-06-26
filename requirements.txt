@@ -3,3 +3,4 @@ flask-cors>=4.0
 mutagen>=1.47
 gunicorn>=21.0
 requests>=2.31
+Pillow>=10.0
