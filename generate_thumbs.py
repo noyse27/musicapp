@@ -29,6 +29,8 @@ def main():
                         help="Parallel worker threads (default: 4)")
     parser.add_argument("--force", action="store_true",
                         help="Regenerate even if thumbnail already exists")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Show failed cover hashes")
     args = parser.parse_args()
 
     from db import get_connection
@@ -61,6 +63,7 @@ def main():
 
     done = 0
     errors = 0
+    failed = []
 
     def _generate(row):
         try:
@@ -71,22 +74,31 @@ def main():
             tp = _thumb_path(row["hash"])
             with open(tp, "wb") as f:
                 f.write(buf.getvalue())
-            return True
+            return (True, None)
         except Exception as e:
-            log.debug("Failed %s: %s", row["hash"], e)
-            return False
+            return (False, str(e))
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(_generate, row): row["hash"] for row in todo}
         for i, fut in enumerate(as_completed(futures), 1):
-            if fut.result():
+            ok, err = fut.result()
+            hash_ = futures[fut]
+            if ok:
                 done += 1
             else:
                 errors += 1
+                failed.append((hash_, err))
             if i % 100 == 0 or i == len(todo):
                 log.info("Progress: %d / %d (errors: %d)", i, len(todo), errors)
 
     log.info("Done. Generated: %d, Errors: %d", done, errors)
+
+    if failed and args.verbose:
+        log.info("\n--- Failed covers (%d) ---", len(failed))
+        for hash_, err in failed:
+            log.info("  %s: %s", hash_[:16], err)
+    elif failed:
+        log.info("Run with --verbose to see which covers failed (likely corrupt embedded images).")
 
 
 if __name__ == "__main__":
