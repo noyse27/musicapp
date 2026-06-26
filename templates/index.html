@@ -1448,10 +1448,6 @@ async function loadTracks(page = 1, forceCount = false) {
     state.pages = Math.max(1, Math.ceil(state.total / 50));
   }
 
-  // Cancel pending cover loads from previous page
-  _coverQueue = [];
-  if (_coverTimer) { clearTimeout(_coverTimer); _coverTimer = null; }
-
   _setSearching(false);
   renderTracks();
   renderPagination();
