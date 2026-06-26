@@ -357,7 +357,7 @@ function updateUI(track) {
   inner.innerHTML = "";
   if (track.has_cover) {
     const img = document.createElement("img");
-    img.src = `${API}/api/cover/${track.cover_hash}`;
+    img.src = `${API}/api/cover/${track.cover_hash}?full=1`;
     img.onerror = () => { inner.innerHTML = ""; inner.appendChild(makePh(track)); };
     inner.appendChild(img);
   } else {

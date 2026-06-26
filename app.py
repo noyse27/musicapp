@@ -172,30 +172,34 @@ def _make_thumb(data: bytes) -> bytes | None:
 
 @app.get("/api/cover/<hash_>")
 def api_cover(hash_):
-    # Serve cached thumbnail if available
-    tp = _thumb_path(hash_)
-    if os.path.exists(tp):
-        resp = send_file(tp, mimetype="image/webp", max_age=86400 * 365)
-        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        resp.headers["ETag"] = f'"{hash_}"'
-        return resp
+    import io
+    full = request.args.get("full") == "1"
 
-    # Generate thumbnail from DB blob
+    # Full size requested (e.g. radio companion) — skip thumbnail
+    if not full:
+        tp = _thumb_path(hash_)
+        if os.path.exists(tp):
+            resp = send_file(tp, mimetype="image/webp", max_age=86400 * 365)
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            resp.headers["ETag"] = f'"{hash_}-thumb"'
+            return resp
+
     data, mime = db.get_cover(hash_)
     if data is None:
         abort(404)
 
-    thumb = _make_thumb(data)
-    if thumb:
-        os.makedirs(_THUMB_DIR, exist_ok=True)
-        with open(tp, "wb") as f:
-            f.write(thumb)
-        import io
-        resp = send_file(io.BytesIO(thumb), mimetype="image/webp", max_age=86400 * 365)
-    else:
-        import io
-        resp = send_file(io.BytesIO(data), mimetype=mime, max_age=86400 * 365)
+    if not full:
+        thumb = _make_thumb(data)
+        if thumb:
+            os.makedirs(_THUMB_DIR, exist_ok=True)
+            with open(_thumb_path(hash_), "wb") as f:
+                f.write(thumb)
+            resp = send_file(io.BytesIO(thumb), mimetype="image/webp", max_age=86400 * 365)
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            resp.headers["ETag"] = f'"{hash_}-thumb"'
+            return resp
 
+    resp = send_file(io.BytesIO(data), mimetype=mime, max_age=86400 * 365)
     resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     resp.headers["ETag"] = f'"{hash_}"'
     return resp
