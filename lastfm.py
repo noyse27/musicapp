@@ -84,3 +84,44 @@ def get_track_info(session_key: str, artist: str, title: str) -> dict:
         return data.get("track", {})
     except Exception:
         return {}
+
+
+def get_loved_tracks(username: str, limit: int = 200) -> list[dict]:
+    """Fetch all loved tracks for a Last.fm user."""
+    tracks = []
+    page = 1
+    total_pages = 1
+    while page <= total_pages:
+        data = _get({
+            "method": "user.getLovedTracks",
+            "user": username,
+            "limit": limit,
+            "page": page,
+        })
+        loved = data.get("lovedtracks", {})
+        attrs = loved.get("@attr", {})
+        try:
+            total_pages = int(attrs.get("totalPages") or total_pages)
+        except (TypeError, ValueError):
+            total_pages = page
+
+        for item in loved.get("track", []):
+            artist = item.get("artist", {})
+            if isinstance(artist, dict):
+                artist_name = artist.get("name")
+            else:
+                artist_name = str(artist) if artist else None
+            loved_at = None
+            date = item.get("date", {})
+            if isinstance(date, dict):
+                try:
+                    loved_at = int(date.get("uts")) if date.get("uts") else None
+                except (TypeError, ValueError):
+                    loved_at = None
+            tracks.append({
+                "artist": artist_name,
+                "title": item.get("name"),
+                "loved_at": loved_at,
+            })
+        page += 1
+    return tracks

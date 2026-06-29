@@ -250,6 +250,43 @@
     }
     #btn-bpm-tag:hover, #btn-bpm-calc:hover { background: var(--bg-secondary); }
     #btn-bpm-tag.running, #btn-bpm-calc.running { color: var(--accent); }
+    .field-search-panel {
+      display: none;
+      margin-top: 6px;
+    }
+    .field-search-input {
+      width: 100%;
+      border: 0.5px solid var(--border-subtle);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: var(--text-base);
+      padding: 6px 8px;
+      outline: none;
+    }
+    .field-search-input::placeholder { color: var(--text-tertiary); }
+    .field-search-input:focus { border-color: var(--accent-border); }
+    #btn-loved-filter {
+      display: none;
+      width: 100%;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: transparent;
+      border: 0.5px solid var(--border-medium);
+      border-radius: 6px;
+      font-size: var(--text-base);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background .1s, color .1s, border-color .1s;
+    }
+    #btn-loved-filter:hover { background: var(--bg-secondary); }
+    #btn-loved-filter.active {
+      border-color: #e03e3e;
+      color: #e03e3e;
+      background: color-mix(in srgb, #e03e3e 12%, var(--bg-primary));
+    }
+    #btn-loved-filter.running { color: var(--accent); border-color: var(--accent-border); }
 
     /* ── Content area ─────────────────────────────────── */
     #content {
@@ -843,8 +880,8 @@
       <div class="chip-group">
         <button class="chip chip-alle active" id="chip-artist-alle" data-val="">Alle</button>
       </div>
-      <div id="chips-artist-list" style="display:none;margin-top:6px">
-        <div class="chip-group" id="chips-artist-inner"></div>
+      <div class="field-search-panel" id="artist-search-panel">
+        <input class="field-search-input" id="artist-search" type="search" autocomplete="off">
       </div>
     </div>
 
@@ -853,9 +890,26 @@
       <div class="chip-group">
         <button class="chip chip-alle active" id="chip-title-alle" data-val="">Alle</button>
       </div>
-      <div id="chips-title-list" style="display:none;margin-top:6px">
-        <div class="chip-group" id="chips-title-inner"></div>
+      <div class="field-search-panel" id="title-search-panel">
+        <input class="field-search-input" id="title-search" type="search" autocomplete="off">
       </div>
+    </div>
+
+    <div class="filter-section">
+      <span class="filter-label" data-i18n="album_filter">Album</span>
+      <div class="chip-group">
+        <button class="chip chip-alle active" id="chip-album-alle" data-val="">Alle</button>
+      </div>
+      <div class="field-search-panel" id="album-search-panel">
+        <input class="field-search-input" id="album-search" type="search" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <button id="btn-loved-filter" title="Loved Tracks aus Last.fm">
+        <i class="ti ti-heart"></i>
+        <span>Last.fm Loved</span>
+      </button>
     </div>
 
     <div class="filter-section">
@@ -1059,6 +1113,7 @@ const LANG = {
     loading:          "Lade…",
     artist:           "Interpret",
     title_filter:     "Titel",
+    album_filter:     "Album",
     genre:            "Genre",
     decade:           "Jahrzehnt",
     length:           "Länge",
@@ -1071,6 +1126,9 @@ const LANG = {
     scan_lib:         "Bibliothek scannen",
     scanning:         "Bibliothek wird gescannt…",
     search_ph:        "Titel, Interpret, Album durchsuchen…",
+    artist_search_ph: "Interpret suchen…",
+    title_search_ph:  "Titel suchen…",
+    album_search_ph:  "Album suchen…",
     sort_artist:      "Interpret A–Z",
     sort_title:       "Titel A–Z",
     sort_album:       "Album A–Z",
@@ -1101,11 +1159,14 @@ const LANG = {
     lfm_unlove:       "Nicht mehr mögen (Last.fm)",
     lfm_connect:      "Last.fm verbinden",
     lfm_disconnect:   "Trennen",
+    lfm_loved_filter: "Loved in Last.fm",
+    lfm_loved_sync:   "Loved wird geladen…",
   },
   en: {
     loading:          "Loading…",
     artist:           "Artist",
     title_filter:     "Title",
+    album_filter:     "Album",
     genre:            "Genre",
     decade:           "Decade",
     length:           "Length",
@@ -1118,6 +1179,9 @@ const LANG = {
     scan_lib:         "Scan library",
     scanning:         "Scanning library…",
     search_ph:        "Search title, artist, album…",
+    artist_search_ph: "Search artist…",
+    title_search_ph:  "Search title…",
+    album_search_ph:  "Search album…",
     sort_artist:      "Artist A–Z",
     sort_title:       "Title A–Z",
     sort_album:       "Album A–Z",
@@ -1148,6 +1212,8 @@ const LANG = {
     lfm_unlove:       "Unlove on Last.fm",
     lfm_connect:      "Connect Last.fm",
     lfm_disconnect:   "Disconnect",
+    lfm_loved_filter: "Loved in Last.fm",
+    lfm_loved_sync:   "Loading loved…",
   },
 };
 
@@ -1179,6 +1245,10 @@ function applyLang() {
   $("btn-scan").innerHTML = `<i class="ti ti-refresh"></i> ${L.scan_lib}`;
   // Search
   $("search").placeholder = L.search_ph;
+  $("artist-search").placeholder = L.artist_search_ph;
+  $("title-search").placeholder = L.title_search_ph;
+  $("album-search").placeholder = L.album_search_ph;
+  updateLovedFilterButton(false);
   // Sort options
   const sortMap = { artist: "sort_artist", title: "sort_title", album: "sort_album", year: "sort_year", duration: "sort_duration" };
   document.querySelectorAll("#sort-select option").forEach(o => {
@@ -1332,7 +1402,8 @@ const state = {
     min_dur: 0, max_dur: 0,
     min_bitrate: 0,
     year_min: 0, year_max: 0,
-    artist_letter: "", title_letter: "",
+    artist_query: "", title_query: "", album_query: "",
+    loved: false,
   },
 };
 
@@ -1424,8 +1495,10 @@ async function loadTracks(page = 1, forceCount = false) {
   if (state.filters.year_max > 0)    p.set("year_max",    state.filters.year_max);
   if (state.filters.bpm_min > 0)     p.set("bpm_min",     state.filters.bpm_min);
   if (state.filters.bpm_max > 0)     p.set("bpm_max",     state.filters.bpm_max);
-  if (state.filters.artist_letter)   p.set("artist_letter", state.filters.artist_letter);
-  if (state.filters.title_letter)    p.set("title_letter",  state.filters.title_letter);
+  if (state.filters.artist_query)    p.set("artist", state.filters.artist_query);
+  if (state.filters.title_query)     p.set("title",  state.filters.title_query);
+  if (state.filters.album_query)     p.set("album",  state.filters.album_query);
+  if (state.filters.loved)           p.set("loved",  "1");
 
   let data;
   try {
@@ -1539,7 +1612,8 @@ function renderTracks() {
     if (lfm.connected) {
       const loveBtn = document.createElement("button");
       const loveKey = `${track.artist}||${track.title}`;
-      const isLoved = lfm.lovedCache.get(loveKey) || false;
+      const isLoved = Boolean(track.loved || lfm.lovedCache.get(loveKey));
+      lfm.lovedCache.set(loveKey, isLoved);
       loveBtn.className = "btn-love" + (isLoved ? " loved" : "");
       loveBtn.dataset.key = loveKey;
       loveBtn.title = isLoved ? t().lfm_unlove : t().lfm_love;
@@ -1551,13 +1625,6 @@ function renderTracks() {
         lfmToggleLove(track, loveBtn);
       });
       row.appendChild(loveBtn);
-      // lazy-load loved status if not cached
-      if (!lfm.lovedCache.has(loveKey)) {
-        lfmCheckLoved(track).then(loved => {
-          lfm.lovedCache.set(loveKey, loved);
-          applyLovedState(loveBtn, loved);
-        });
-      }
     }
 
     row.addEventListener("click", () => playTrack(i));
@@ -1643,7 +1710,10 @@ function updatePlayerUI(t) {
     wrap.appendChild(ph);
   }
   if (lfm.connected) {
-    lfmCheckLoved(t).then(loved => applyLovedState($("player-love"), loved));
+    const key = `${t.artist}||${t.title}`;
+    const loved = Boolean(t.loved || lfm.lovedCache.get(key));
+    lfm.lovedCache.set(key, loved);
+    applyLovedState($("player-love"), loved);
     fetch(`${API}/api/lastfm/nowplaying`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1973,6 +2043,7 @@ function renderLfmStatus() {
       <span>${esc(lfm.username)}</span>
       <button id="lastfm-connect" onclick="lfmDisconnect()" title="${t().lfm_disconnect}">✕</button>`;
     $("player-love").style.display = "";
+    $("btn-loved-filter").style.display = "flex";
   } else {
     el.innerHTML = `
       <button id="lastfm-connect" onclick="location.href='/api/lastfm/auth'">
@@ -1981,6 +2052,9 @@ function renderLfmStatus() {
         ${t().lfm_connect}
       </button>`;
     $("player-love").style.display = "none";
+    $("btn-loved-filter").style.display = "none";
+    state.filters.loved = false;
+    updateLovedFilterButton();
   }
 }
 
@@ -1988,6 +2062,7 @@ async function lfmDisconnect() {
   await fetch(`${API}/api/lastfm/disconnect`, { method: "POST" });
   lfm.connected = false; lfm.username = null;
   lfm.lovedCache.clear();
+  state.filters.loved = false;
   miniCh.postMessage({ type: "lfm", connected: false, loved: false });
   renderLfmStatus();
   renderTracks();
@@ -2000,19 +2075,6 @@ async function lfmScrobble(track) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ artist: track.artist, title: track.title }),
   }).catch(() => {});
-}
-
-async function lfmCheckLoved(track) {
-  if (!lfm.connected || !track) return false;
-  const key = `${track.artist}||${track.title}`;
-  if (lfm.lovedCache.has(key)) return lfm.lovedCache.get(key);
-  try {
-    const p = new URLSearchParams({ artist: track.artist || "", title: track.title || "" });
-    const res = await fetch(`${API}/api/lastfm/loved?${p}`);
-    const data = await res.json();
-    lfm.lovedCache.set(key, data.loved);
-    return data.loved;
-  } catch { return false; }
 }
 
 async function lfmToggleLove(track, btn) {
@@ -2033,6 +2095,36 @@ async function lfmToggleLove(track, btn) {
     document.querySelectorAll(`.btn-love[data-key="${CSS.escape(key)}"]`).forEach(b => applyLovedState(b, !isLoved));
   } catch (e) { console.error("Last.fm love failed", e); }
 }
+
+function updateLovedFilterButton(running = false) {
+  const btn = $("btn-loved-filter");
+  if (!btn) return;
+  btn.classList.toggle("active", state.filters.loved);
+  btn.classList.toggle("running", running);
+  btn.innerHTML = running
+    ? `<i class="ti ti-loader"></i><span>${t().lfm_loved_sync}</span>`
+    : `<i class="ti ${state.filters.loved ? "ti-heart-filled" : "ti-heart"}"></i><span>${t().lfm_loved_filter}</span>`;
+}
+
+async function startLovedSync(reloadWhenDone = false) {
+  if (!lfm.connected) return;
+  try {
+    updateLovedFilterButton(true);
+    await fetch(`${API}/api/lastfm/loved/sync`, { method: "POST" });
+    updateLovedFilterButton(false);
+    if (reloadWhenDone && state.filters.loved) loadTracks(1, true);
+  } catch {
+    updateLovedFilterButton(false);
+  }
+}
+
+$("btn-loved-filter").onclick = async () => {
+  if (!lfm.connected) return;
+  state.filters.loved = !state.filters.loved;
+  updateLovedFilterButton(false);
+  if (state.filters.loved) startLovedSync(true);
+  loadTracks(1, true);
+};
 
 function applyLovedState(btn, loved) {
   if (!btn) return;
@@ -2088,54 +2180,41 @@ $("chips-genre-inner").addEventListener("click", e => {
 setupChips("chips-decade", "decade");
 setupChips("chips-format", "format");
 
-// ── Alpha-Filter (Interpret & Titel) ───────────────────────
-const ALPHA_BUTTONS = [
-  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),
-  "0–9", "#"
-];
+// ── Feldsuche (Interpret, Titel, Album) ────────────────────
+const fieldSearchTimers = {};
 
-function buildAlphaChips(innerId) {
-  const inner = $(innerId);
-  inner.innerHTML = "";
-  ALPHA_BUTTONS.forEach(val => {
-    const btn = document.createElement("button");
-    btn.className = "chip";
-    btn.dataset.val = val;
-    btn.textContent = val;
-    inner.appendChild(btn);
-  });
-}
+function setupFieldSearch(alleId, panelId, inputId, filterKey) {
+  const alle = $(alleId);
+  const panel = $(panelId);
+  const input = $(inputId);
 
-function setupAlphaFilter(alleId, listId, innerId, filterKey) {
-  buildAlphaChips(innerId);
-
-  $(alleId).onclick = () => {
-    const list   = $(listId);
-    const isOpen = list.style.display !== "none";
+  alle.onclick = () => {
+    const isOpen = panel.style.display !== "none";
     if (isOpen) {
-      list.style.display = "none";
-      $(innerId).querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
-      $(alleId).classList.add("active");
+      panel.style.display = "none";
+      alle.classList.add("active");
+      input.value = "";
       state.filters[filterKey] = "";
       loadTracks(1);
     } else {
-      list.style.display = "block";
-      $(alleId).classList.remove("active");
+      panel.style.display = "block";
+      alle.classList.remove("active");
+      input.focus();
     }
   };
 
-  $(innerId).addEventListener("click", e => {
-    const chip = e.target.closest(".chip");
-    if (!chip) return;
-    $(innerId).querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
-    chip.classList.add("active");
-    state.filters[filterKey] = chip.dataset.val;
-    loadTracks(1);
-  });
+  input.oninput = () => {
+    clearTimeout(fieldSearchTimers[filterKey]);
+    fieldSearchTimers[filterKey] = setTimeout(() => {
+      state.filters[filterKey] = input.value.trim();
+      loadTracks(1);
+    }, 350);
+  };
 }
 
-setupAlphaFilter("chip-artist-alle", "chips-artist-list", "chips-artist-inner", "artist_letter");
-setupAlphaFilter("chip-title-alle",  "chips-title-list",  "chips-title-inner",  "title_letter");
+setupFieldSearch("chip-artist-alle", "artist-search-panel", "artist-search", "artist_query");
+setupFieldSearch("chip-title-alle",  "title-search-panel",  "title-search",  "title_query");
+setupFieldSearch("chip-album-alle",  "album-search-panel",  "album-search",  "album_query");
 
 // ── Range sliders ──────────────────────────────────────────
 $("sl-min-dur").oninput = function() {

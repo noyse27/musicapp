@@ -86,8 +86,10 @@ def api_search():
     year_max    = request.args.get("year_max") or None
     bpm_min     = request.args.get("bpm_min") or None
     bpm_max     = request.args.get("bpm_max") or None
-    artist_letter = request.args.get("artist_letter") or None
-    title_letter  = request.args.get("title_letter") or None
+    artist_q    = request.args.get("artist", "").strip()
+    title_q     = request.args.get("title", "").strip()
+    album_q     = request.args.get("album", "").strip()
+    loved       = request.args.get("loved") == "1"
     page     = _int_arg("page",     1,   min_val=1)
     per_page = _int_arg("per_page", 50,  min_val=1, max_val=200)
     sort     = request.args.get("sort", "artist")
@@ -105,12 +107,13 @@ def api_search():
         return jsonify({"error": "invalid numeric parameter"}), 400
 
     total, tracks = db.search_tracks(
-        query=q, genre=genre, decade=decade, fmt=fmt,
+        query=q, artist_query=artist_q, title_query=title_q, album_query=album_q,
+        genre=genre, decade=decade, fmt=fmt,
         min_dur=min_dur, max_dur=max_dur, min_bitrate=min_bitrate,
         year_min=year_min, year_max=year_max,
         bpm_min=bpm_min, bpm_max=bpm_max,
-        artist_letter=artist_letter, title_letter=title_letter,
         page=page, per_page=per_page, sort=sort, count=do_count,
+        loved_only=loved, include_loved=bool(db.get_setting("lastfm_session_key")),
     )
     return jsonify({
         "total": total,
@@ -449,6 +452,43 @@ def api_lastfm_disconnect():
     return jsonify({"ok": True})
 
 
+_lastfm_loved_sync = {"running": False, "error": None, "count": 0, "finished_at": None}
+
+
+def _sync_lastfm_loved_tracks():
+    global _lastfm_loved_sync
+    username = db.get_setting("lastfm_username")
+    if not username:
+        _lastfm_loved_sync.update(running=False, error="not connected")
+        return
+    try:
+        items = lastfm.get_loved_tracks(username)
+        count = db.replace_lastfm_loved_tracks(items)
+        _lastfm_loved_sync.update(running=False, error=None, count=count, finished_at=_time.time())
+    except Exception as e:
+        logging.getLogger(__name__).exception("Last.fm loved sync failed")
+        _lastfm_loved_sync.update(running=False, error=str(e), finished_at=_time.time())
+
+
+@app.get("/api/lastfm/loved/status")
+def api_lastfm_loved_status():
+    status = db.get_lastfm_loved_status()
+    status.update(_lastfm_loved_sync)
+    status["connected"] = bool(db.get_setting("lastfm_session_key"))
+    return jsonify(status)
+
+
+@app.post("/api/lastfm/loved/sync")
+def api_lastfm_loved_sync():
+    if not db.get_setting("lastfm_session_key"):
+        return jsonify({"error": "not connected"}), 401
+    _lastfm_loved_sync.update(running=True, error=None)
+    _sync_lastfm_loved_tracks()
+    status = db.get_lastfm_loved_status()
+    status.update(_lastfm_loved_sync)
+    return jsonify(status)
+
+
 @app.post("/api/lastfm/nowplaying")
 def api_lastfm_nowplaying():
     sk = db.get_setting("lastfm_session_key")
@@ -499,8 +539,10 @@ def api_lastfm_love():
     try:
         if action == "love":
             lastfm.love(sk, artist, title)
+            db.set_lastfm_loved(artist, title, True)
         else:
             lastfm.unlove(sk, artist, title)
+            db.set_lastfm_loved(artist, title, False)
         return jsonify({"ok": True, "loved": action == "love"})
     except Exception:
         logging.getLogger(__name__).exception("Last.fm love/unlove failed")

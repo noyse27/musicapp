@@ -42,7 +42,9 @@ def init_db():
                 bitrate     INTEGER,
                 size        INTEGER,
                 cover_hash  TEXT,
+                bpm         REAL,
                 mtime       REAL,
+                play_count  INTEGER NOT NULL DEFAULT 0,
                 indexed_at  REAL DEFAULT (unixepoch())
             );
 
@@ -88,6 +90,16 @@ def init_db():
                 key   TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS lastfm_loved_tracks (
+                artist_norm TEXT NOT NULL,
+                title_norm  TEXT NOT NULL,
+                artist      TEXT,
+                title       TEXT,
+                loved_at    INTEGER,
+                synced_at   REAL DEFAULT (unixepoch()),
+                PRIMARY KEY (artist_norm, title_norm)
+            );
         """)
         # Migrations (safe to run repeatedly)
         for migration in [
@@ -100,13 +112,21 @@ def init_db():
                 pass
 
 
-def search_tracks(query="", genre=None, decade=None, fmt=None,
+def _norm_text(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def _like_pattern(value: str) -> str:
+    return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def search_tracks(query="", artist_query="", title_query="", album_query="",
+                  genre=None, decade=None, fmt=None,
                   min_dur=None, max_dur=None, min_bitrate=None,
                   year_min=None, year_max=None,
                   bpm_min=None, bpm_max=None,
-                  artist_letter=None, title_letter=None,
                   page=1, per_page=50, sort="artist",
-                  count=True):
+                  count=True, loved_only=False, include_loved=False):
     params = []
     conditions = []
 
@@ -117,6 +137,16 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
             "t.id IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?)"
         )
         params.append(fts_query)
+
+    if artist_query:
+        conditions.append("LOWER(COALESCE(t.artist, '')) LIKE ? ESCAPE '\\'")
+        params.append(_like_pattern(artist_query.casefold()))
+    if title_query:
+        conditions.append("LOWER(COALESCE(t.title, '')) LIKE ? ESCAPE '\\'")
+        params.append(_like_pattern(title_query.casefold()))
+    if album_query:
+        conditions.append("LOWER(COALESCE(t.album, '')) LIKE ? ESCAPE '\\'")
+        params.append(_like_pattern(album_query.casefold()))
 
     if genre:
         conditions.append("t.genre = ?")
@@ -154,25 +184,15 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
         conditions.append("t.bpm <= ?")
         params.append(float(bpm_max))
 
-    def _letter_cond(col, letter, params_list):
-        # Use index-friendly range comparisons instead of SUBSTR(UPPER(...))
-        if letter == "0–9":
-            return f"({col} >= '0' AND {col} < ':')"
-        elif letter == "#":
-            return (f"({col} < '0' OR ({col} > '9' AND {col} < 'A') OR "
-                    f"({col} > 'Z' AND {col} < 'a') OR {col} > 'z')")
-        else:
-            lo = letter.upper()
-            hi = chr(ord(lo) + 1)
-            params_list += [lo, lo.lower(), hi, hi.lower()]
-            return (f"(({col} >= ? AND {col} < ?) OR ({col} >= ? AND {col} < ?))")
-
-    if artist_letter:
-        cond = _letter_cond("t.artist", artist_letter, params)
-        conditions.append(cond)
-    if title_letter:
-        cond = _letter_cond("t.title", title_letter, params)
-        conditions.append(cond)
+    loved_join = ""
+    loved_select = "0 AS loved"
+    if loved_only or include_loved:
+        loved_join = """LEFT JOIN lastfm_loved_tracks l
+                  ON l.artist_norm = LOWER(COALESCE(t.artist, ''))
+                 AND l.title_norm = LOWER(COALESCE(t.title, ''))"""
+        loved_select = "CASE WHEN l.artist_norm IS NULL THEN 0 ELSE 1 END AS loved"
+    if loved_only:
+        conditions.append("l.artist_norm IS NOT NULL")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -190,8 +210,8 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
         rows = conn.execute(
             f"""SELECT t.id, t.path, t.title, t.artist, t.album, t.genre,
                        t.year, t.track_no, t.duration, t.bitrate, t.size,
-                       t.cover_hash, t.bpm
-                FROM tracks t {where}
+                       t.cover_hash, t.bpm, {loved_select}
+                FROM tracks t {loved_join} {where}
                 ORDER BY {order}
                 LIMIT ? OFFSET ?""",
             params + [per_page, offset],
@@ -200,7 +220,7 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
         if count:
             # Full count only when requested (first page or filter change)
             total = conn.execute(
-                f"SELECT COUNT(*) FROM tracks t {where}", params
+                f"SELECT COUNT(*) FROM tracks t {loved_join} {where}", params
             ).fetchone()[0]
         else:
             # Estimate: if we got a full page there are more; otherwise offset+len
@@ -222,9 +242,65 @@ def search_tracks(query="", genre=None, decade=None, fmt=None,
         d["duration_fmt"] = fmt_duration(d["duration"])
         d["format"] = file_format(d["path"])
         d["has_cover"] = bool(d["cover_hash"])
+        d["loved"] = bool(d.get("loved"))
         tracks.append(d)
 
     return total, tracks
+
+
+def replace_lastfm_loved_tracks(items: list[dict]):
+    now = __import__("time").time()
+    rows = [
+        (
+            _norm_text(item.get("artist")),
+            _norm_text(item.get("title")),
+            item.get("artist"),
+            item.get("title"),
+            item.get("loved_at"),
+            now,
+        )
+        for item in items
+        if _norm_text(item.get("artist")) and _norm_text(item.get("title"))
+    ]
+    with db() as conn:
+        conn.execute("DELETE FROM lastfm_loved_tracks")
+        conn.executemany(
+            """INSERT OR REPLACE INTO lastfm_loved_tracks
+               (artist_norm, title_norm, artist, title, loved_at, synced_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                     ("lastfm_loved_synced_at", str(now)))
+    return len(rows)
+
+
+def set_lastfm_loved(artist: str, title: str, loved: bool):
+    artist_norm = _norm_text(artist)
+    title_norm = _norm_text(title)
+    if not artist_norm or not title_norm:
+        return
+    with db() as conn:
+        if loved:
+            conn.execute(
+                """INSERT OR REPLACE INTO lastfm_loved_tracks
+                   (artist_norm, title_norm, artist, title, loved_at, synced_at)
+                   VALUES (?, ?, ?, ?, unixepoch(), unixepoch())""",
+                (artist_norm, title_norm, artist, title),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM lastfm_loved_tracks WHERE artist_norm=? AND title_norm=?",
+                (artist_norm, title_norm),
+            )
+
+
+def get_lastfm_loved_status():
+    with db() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM lastfm_loved_tracks").fetchone()[0]
+        row = conn.execute("SELECT value FROM settings WHERE key=?", ("lastfm_loved_synced_at",)).fetchone()
+        synced_at = row["value"] if row else None
+    return {"total": total, "synced_at": float(synced_at) if synced_at else None}
 
 
 def get_genres():
