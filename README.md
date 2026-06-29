@@ -20,7 +20,7 @@ A self-hosted music archive web app for Synology NAS (or any Docker host). Brows
 - **Download basket** — select tracks, export as ZIP
 - **BPM support** — reads TBPM tag (Mixmeister-compatible), background librosa analysis for untagged tracks, writes result back to file tag; BPM shown in search results and filter
 - **Background scanner** — indexes library without blocking UI, skips unchanged files (mtime), generates cover thumbnails after scan
-- **Last.fm scrobbling** — auto-scrobble + love tracks
+- **Last.fm scrobbling** — auto-scrobble + love tracks; loved status cached locally for instant display (no per-page API calls)
 - **Adolar Disco badge** — shows 🪩 Disco in topbar when Adolar Disco is connected
 
 ## Quick Start (Docker)
