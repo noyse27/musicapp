@@ -243,6 +243,45 @@ def api_users_set_download(user_id):
     _auth.set_allow_download(user_id, allow)
     return jsonify({"ok": True, "allow_download": allow})
 
+@app.get("/api/me-optional")
+def api_me_optional():
+    """Like /api/me but returns null instead of 401 — used by Radio Companion."""
+    token = request.cookies.get(_auth.SESSION_COOKIE)
+    if token:
+        user = _auth.get_user_by_token(token)
+        if user:
+            is_admin = user["role"] == "admin"
+            return jsonify({
+                "id":             user["id"],
+                "username":       user["username"],
+                "role":           user["role"],
+                "allow_download": is_admin or bool(user["allow_download"]),
+            })
+    return jsonify(None)
+
+
+@app.post("/api/radio/bookmark/<int:track_id>")
+def api_radio_bookmark(track_id):
+    token = request.cookies.get(_auth.SESSION_COOKIE)
+    user  = _auth.get_user_by_token(token) if token else None
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    with db.db() as conn:
+        if not conn.execute("SELECT 1 FROM tracks WHERE id=?", (track_id,)).fetchone():
+            abort(404)
+    pl_id = db.get_or_create_radio_favorites(user["id"])
+    db.add_track_to_playlist(pl_id, track_id)
+    return jsonify({"ok": True, "playlist_id": pl_id})
+
+
+@app.get("/api/playlists/<int:playlist_id>/tracks")
+def api_playlist_tracks(playlist_id):
+    tracks = db.get_playlist_tracks(playlist_id, g.user["id"])
+    if tracks is None:
+        return jsonify({"error": "Nicht gefunden."}), 404
+    return jsonify(tracks)
+
+
 @app.get("/api/playlists")
 def api_playlists_list():
     return jsonify(db.get_playlists(g.user["id"]))

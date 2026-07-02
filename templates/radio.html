@@ -144,6 +144,24 @@
     #btn-love:hover { color: #e03e3e; }
     #btn-love.loved { color: #e03e3e; }
 
+    #btn-bookmark { color: var(--text-tertiary); }
+    #btn-bookmark:hover { color: var(--accent); }
+    #btn-bookmark.bookmarked { color: var(--accent); }
+
+    #user-badge {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text-tertiary);
+      -webkit-app-region: no-drag;
+    }
+    #btn-radio-login {
+      font-size: 11px; padding: 3px 8px;
+      background: none; border: 0.5px solid var(--border-subtle);
+      border-radius: 6px; color: var(--text-tertiary); cursor: pointer;
+      -webkit-app-region: no-drag; transition: border-color .15s, color .15s;
+    }
+    #btn-radio-login:hover { border-color: var(--accent-border); color: var(--accent); }
+
     /* ── Volume ── */
     #volume-wrap {
       display: flex; align-items: center; gap: 5px;
@@ -174,8 +192,12 @@
   <img src="/static/logo.svg" alt="Adolar">
   <span>Adolar</span>
   <span id="titlebar-sub">Radio</span>
+  <div id="user-badge">
+    <span id="user-badge-name" style="display:none"></span>
+    <a id="btn-radio-login" href="/login?next=/radio" style="display:none">Anmelden</a>
+  </div>
   <button id="btn-settings" title="Einstellungen" onclick="openSettings()" style="
-    margin-left:auto; background:none; border:none; cursor:pointer;
+    background:none; border:none; cursor:pointer;
     color:#5C5C58; padding:4px; border-radius:4px;
     display:flex; align-items:center; -webkit-app-region:no-drag;
     transition:color .15s;">
@@ -207,6 +229,7 @@
   <button class="ctrl" id="btn-prev" title="Vorheriger Titel"><i class="ti ti-player-skip-back"></i></button>
   <button class="ctrl" id="btn-play" title="Play/Pause"><i class="ti ti-player-play"></i></button>
   <button class="ctrl" id="btn-next" title="Nächster Titel"><i class="ti ti-player-skip-forward"></i></button>
+  <button class="ctrl" id="btn-bookmark" title="Zu Radio-Favoriten hinzufügen" style="display:none"><i class="ti ti-bookmark"></i></button>
   <button class="ctrl" id="btn-love" title="Bei Last.fm liken" style="display:none"><i class="ti ti-heart"></i></button>
   <div id="volume-wrap">
     <i class="ti ti-volume"></i>
@@ -352,6 +375,8 @@ function updateUI(track) {
   document.getElementById("track-artist").textContent =
     [track.artist, track.year].filter(Boolean).join(" · ");
   document.title = track.title ? `${track.title} – ${track.artist || ""}` : "Adolar Radio";
+
+  updateBookmarkBtn(track);
 
   const inner = document.getElementById("cover-inner");
   inner.innerHTML = "";
@@ -506,8 +531,61 @@ document.getElementById("volume").oninput = e => {
   audioB.volume = e.target.valueAsNumber;
 };
 
+// ── Current user ──────────────────────────────────────────
+let _radioUser = null;
+
+async function initUser() {
+  try {
+    const r = await fetch(`${API}/api/me-optional`);
+    _radioUser = await r.json();
+  } catch { _radioUser = null; }
+
+  const nameBadge  = document.getElementById("user-badge-name");
+  const loginBtn   = document.getElementById("btn-radio-login");
+  const bookmarkBtn = document.getElementById("btn-bookmark");
+
+  if (_radioUser) {
+    nameBadge.textContent = _radioUser.username;
+    nameBadge.style.display = "inline";
+    loginBtn.style.display  = "none";
+    bookmarkBtn.style.display = "";
+  } else {
+    loginBtn.style.display  = "inline";
+    nameBadge.style.display = "none";
+    bookmarkBtn.style.display = "none";
+  }
+}
+
+// ── Bookmark ──────────────────────────────────────────────
+let _bookmarkedIds = new Set();
+
+document.getElementById("btn-bookmark").onclick = async () => {
+  if (!currentTrack || !_radioUser) return;
+  const btn = document.getElementById("btn-bookmark");
+  try {
+    await fetch(`${API}/api/radio/bookmark/${currentTrack.id}`, { method: "POST" });
+    _bookmarkedIds.add(currentTrack.id);
+    btn.classList.add("bookmarked");
+    btn.innerHTML = `<i class="ti ti-bookmark-filled"></i>`;
+    btn.title = "Bereits in Radio-Favoriten";
+  } catch {}
+};
+
+function updateBookmarkBtn(track) {
+  const btn = document.getElementById("btn-bookmark");
+  if (!_radioUser || !track) return;
+  const already = _bookmarkedIds.has(track.id);
+  btn.classList.toggle("bookmarked", already);
+  btn.innerHTML = already
+    ? `<i class="ti ti-bookmark-filled"></i>`
+    : `<i class="ti ti-bookmark"></i>`;
+  btn.title = already ? "Bereits in Radio-Favoriten" : "Zu Radio-Favoriten hinzufügen";
+}
+
 // ── Last.fm ───────────────────────────────────────────────
 async function lfmInit() {
+  // Last.fm only shown to admin
+  if (!_radioUser || _radioUser.role !== "admin") return;
   try {
     const res  = await fetch(`${API}/api/lastfm/status`);
     const data = await res.json();
@@ -566,7 +644,7 @@ function openSettings() {
 }
 
 // ── Init ──────────────────────────────────────────────────
-lfmInit().then(() => startRadio());
+initUser().then(() => lfmInit()).then(() => startRadio());
 </script>
 </body>
 </html>

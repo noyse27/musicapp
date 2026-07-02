@@ -1623,16 +1623,19 @@ async function loadTracks(page = 1, forceCount = false) {
 }
 
 // ── Render Tracks ─────────────────────────────────────────
-function renderTracks() {
+function renderTracks(overrideTracks) {
   const list = $("track-list");
   list.innerHTML = "";
 
-  if (!state.tracks.length) {
+  const tracks = overrideTracks || state.tracks;
+  if (overrideTracks) state.tracks = overrideTracks;
+
+  if (!tracks.length) {
     list.innerHTML = `<div class="empty-state"><i class="ti ti-music-off"></i>${t().no_tracks}</div>`;
     return;
   }
 
-  state.tracks.forEach((track, i) => {
+  tracks.forEach((track, i) => {
     const row = document.createElement("div");
     row.className = "track-row" + (state.currentTrack?.id === track.id ? " active" : "");
     row.dataset.idx = i;
@@ -2544,8 +2547,25 @@ function renderPlaylistSidebar() {
   });
 }
 
-function applyPlaylist(pl) {
+async function applyPlaylist(pl) {
   _activePl = pl.id;
+  renderPlaylistSidebar();
+
+  // Static playlists: fetch tracks directly and display them
+  if (pl.type === "static") {
+    _setSearching(true);
+    try {
+      const r = await fetch(`/api/playlists/${pl.id}/tracks`);
+      const tracks = await r.json();
+      state.total = tracks.length;
+      state.pages = 1;
+      state.page  = 1;
+      renderTracks(tracks);
+      renderPagination();
+    } catch {}
+    _setSearching(false);
+    return;
+  }
 
   // System playlists: only set sort, clear all filters
   if (pl.is_system) {
@@ -2553,7 +2573,7 @@ function applyPlaylist(pl) {
     state.sort = pl.sort;
     $("sort-select").value = pl.sort;
   } else {
-    // User playlist: restore saved filter state
+    // Smart user playlist: restore saved filter state
     let filters = {};
     try { filters = JSON.parse(pl.filters || "{}"); } catch {}
     resetFilters();
@@ -2563,7 +2583,6 @@ function applyPlaylist(pl) {
     _restoreFilterUI(filters);
   }
 
-  renderPlaylistSidebar();
   loadTracks(1, true);
 }
 

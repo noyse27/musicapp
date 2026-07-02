@@ -136,11 +136,20 @@ def init_db():
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 owner_id   INTEGER,
                 name       TEXT    NOT NULL,
+                type       TEXT    NOT NULL DEFAULT 'smart',
                 filters    TEXT    NOT NULL DEFAULT '{}',
                 sort       TEXT    NOT NULL DEFAULT 'artist',
                 is_system  INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT    DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS playlist_tracks (
+                playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+                track_id    INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+                added_at    REAL    DEFAULT (unixepoch()),
+                PRIMARY KEY (playlist_id, track_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_plt_playlist ON playlist_tracks(playlist_id, added_at);
         """)
         # Seed system playlists (idempotent)
         _seed_system_playlists(conn)
@@ -547,22 +556,82 @@ def get_playlists(user_id: int) -> list[dict]:
     """Return system playlists + playlists owned by user_id."""
     with db() as conn:
         rows = conn.execute(
-            """SELECT id, owner_id, name, filters, sort, is_system, created_at
-               FROM playlists
-               WHERE is_system=1 OR owner_id=?
-               ORDER BY is_system DESC, created_at ASC""",
+            """SELECT p.id, p.owner_id, p.name, p.type, p.filters, p.sort,
+                      p.is_system, p.created_at,
+                      (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id=p.id) AS track_count
+               FROM playlists p
+               WHERE p.is_system=1 OR p.owner_id=?
+               ORDER BY p.is_system DESC, p.type ASC, p.created_at ASC""",
             (user_id,)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def create_playlist(user_id: int, name: str, filters: str, sort: str) -> int:
+def create_playlist(user_id: int, name: str, filters: str, sort: str,
+                    type_: str = "smart") -> int:
     with db() as conn:
         cur = conn.execute(
-            "INSERT INTO playlists (owner_id, name, filters, sort) VALUES (?,?,?,?)",
-            (user_id, name, filters, sort)
+            "INSERT INTO playlists (owner_id, name, type, filters, sort) VALUES (?,?,?,?,?)",
+            (user_id, name, type_, filters, sort)
         )
         return cur.lastrowid
+
+
+def get_or_create_radio_favorites(user_id: int) -> int:
+    """Return playlist id of user's radio bookmark playlist, creating it if needed."""
+    with db() as conn:
+        row = conn.execute(
+            "SELECT id FROM playlists WHERE owner_id=? AND type='static' AND name='Adolar Radio Favoriten'",
+            (user_id,)
+        ).fetchone()
+        if row:
+            return row["id"]
+        cur = conn.execute(
+            "INSERT INTO playlists (owner_id, name, type, filters, sort) VALUES (?,?,?,?,?)",
+            (user_id, "Adolar Radio Favoriten", "static", "{}", "artist")
+        )
+        return cur.lastrowid
+
+
+def add_track_to_playlist(playlist_id: int, track_id: int):
+    with db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id) VALUES (?,?)",
+            (playlist_id, track_id)
+        )
+
+
+def get_playlist_tracks(playlist_id: int, user_id: int) -> list[dict] | None:
+    """Returns track list for a static playlist owned by user_id, or None if not found/wrong owner."""
+    with db() as conn:
+        pl = conn.execute(
+            "SELECT id, owner_id, type FROM playlists WHERE id=?", (playlist_id,)
+        ).fetchone()
+        if not pl or (pl["owner_id"] is not None and pl["owner_id"] != user_id):
+            return None
+        rows = conn.execute(
+            """SELECT t.id, t.path, t.title, t.artist, t.album, t.genre,
+                      t.year, t.duration, t.bitrate, t.cover_hash, t.bpm
+               FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id
+               WHERE pt.playlist_id = ?
+               ORDER BY pt.added_at""",
+            (playlist_id,)
+        ).fetchall()
+    import os as _os
+
+    def _fmt(s):
+        if not s: return "0:00"
+        m, sec = divmod(int(s), 60); return f"{m}:{sec:02d}"
+
+    tracks = []
+    for r in rows:
+        d = dict(r)
+        d["duration_fmt"] = _fmt(d["duration"])
+        d["format"] = _os.path.splitext(d["path"])[1].lstrip(".").upper() if d.get("path") else "MP3"
+        d["has_cover"] = bool(d["cover_hash"])
+        d["loved"] = False
+        tracks.append(d)
+    return tracks
 
 
 def delete_playlist(playlist_id: int, user_id: int) -> bool:

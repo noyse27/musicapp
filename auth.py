@@ -24,7 +24,8 @@ BF_HARD_BLOCK    = 253402300800  # permanent (year 9999); admin must unblock man
 PUBLIC_PREFIXES = (
     "/login", "/setup",
     "/api/stream/", "/api/random", "/api/cover/",
-    "/api/stats", "/api/disco-status",
+    "/api/stats", "/api/disco-status", "/api/me-optional",
+    "/api/radio/",
     "/radio", "/static/",
 )
 # Disco-specific endpoints (no session needed, called by Disco server)
