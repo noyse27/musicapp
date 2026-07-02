@@ -27,6 +27,8 @@ PUBLIC_PREFIXES = (
     "/api/stats", "/api/disco-status",
     "/radio", "/static/",
 )
+# Disco-specific endpoints (no session needed, called by Disco server)
+PUBLIC_SUFFIXES = ("/disco-played",)
 
 # ── In-memory brute-force tracker ─────────────────────────────────────────────
 _bf_lock  = threading.Lock()
@@ -197,6 +199,9 @@ def verify_password(user: dict, password: str) -> bool:
 def _is_public(path: str) -> bool:
     for prefix in PUBLIC_PREFIXES:
         if path == prefix or path.startswith(prefix):
+            return True
+    for suffix in PUBLIC_SUFFIXES:
+        if path.endswith(suffix):
             return True
     return False
 

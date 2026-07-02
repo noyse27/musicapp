@@ -221,6 +221,35 @@
       flex-shrink: 0;
     }
 
+    /* ── Playlists sidebar ────────────────────────────── */
+    #playlist-section {
+      border-top: 0.5px solid var(--border-subtle);
+      padding-top: 14px;
+    }
+    #playlist-section .filter-label { margin-bottom: 6px; }
+    .pl-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 8px; border-radius: 6px; cursor: pointer;
+      font-size: var(--text-sm); color: var(--text-secondary);
+      transition: background .1s, color .1s;
+    }
+    .pl-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
+    .pl-item.active { background: color-mix(in srgb, var(--accent) 15%, var(--bg-secondary)); color: var(--accent); }
+    .pl-item i { font-size: 13px; flex-shrink: 0; }
+    .pl-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pl-del { opacity: 0; background: none; border: none; color: var(--text-tertiary);
+              cursor: pointer; padding: 2px 4px; font-size: 12px; flex-shrink: 0; }
+    .pl-item:hover .pl-del { opacity: 1; }
+    .pl-del:hover { color: #e03e3e; }
+    #btn-save-playlist {
+      display: none; width: 100%; margin-top: 8px; padding: 6px 10px;
+      background: none; border: 0.5px dashed var(--border-medium);
+      border-radius: 6px; color: var(--text-tertiary); font-size: var(--text-sm);
+      cursor: pointer; transition: border-color .1s, color .1s;
+      align-items: center; justify-content: center; gap: 6px;
+    }
+    #btn-save-playlist:hover { border-color: var(--accent-border); color: var(--accent); }
+
     .sidebar-scan {
       margin-top: auto;
       padding-top: 12px;
@@ -1054,6 +1083,16 @@
       </div>
     </div>
 
+    <!-- Playlists -->
+    <div id="playlist-section">
+      <span class="filter-label">Playlists</span>
+      <div id="playlist-system"></div>
+      <div id="playlist-user" style="margin-top:4px"></div>
+      <button id="btn-save-playlist">
+        <i class="ti ti-bookmark-plus"></i> Als Playlist speichern
+      </button>
+    </div>
+
     <div class="sidebar-scan">
       <button id="btn-scan">
         <i class="ti ti-refresh"></i>
@@ -1526,6 +1565,7 @@ function _setSearching(on) {
 
 async function loadTracks(page = 1, forceCount = false) {
   if (radio.active) return;
+  updateSavePlaylistBtn();
   _setSearching(true);
   // Skip COUNT if we already have the total and are just paging
   const needCount = page === 1 || forceCount || state.total === 0;
@@ -2318,7 +2358,7 @@ $("search").oninput = e => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => { state.query = e.target.value.trim(); loadTracks(1); }, 500);
 };
-$("sort-select").onchange = e => { state.sort = e.target.value; loadTracks(1); };
+$("sort-select").onchange = e => { state.sort = e.target.value; clearPlaylist(); loadTracks(1); };
 
 // ── Stats ──────────────────────────────────────────────────
 async function loadStats() {
@@ -2449,6 +2489,148 @@ async function checkDiscoBadge() {
 }
 checkDiscoBadge();
 
+// ── Playlists ─────────────────────────────────────────────────────────────────
+const SYSTEM_SORT_ICONS = {
+  recent:       "ti-history",
+  top_played:   "ti-chart-bar",
+  newest_added: "ti-sparkles",
+  disco_top:    "ti-disc",
+};
+
+let _playlists = [];
+let _activePl  = null;
+
+async function loadPlaylists() {
+  try {
+    const r = await fetch("/api/playlists");
+    _playlists = await r.json();
+  } catch { return; }
+  renderPlaylistSidebar();
+}
+
+function renderPlaylistSidebar() {
+  const sysList  = $("playlist-system");
+  const userList = $("playlist-user");
+  sysList.innerHTML = "";
+  userList.innerHTML = "";
+
+  _playlists.forEach(pl => {
+    const icon = pl.is_system
+      ? (SYSTEM_SORT_ICONS[pl.sort] || "ti-list")
+      : "ti-playlist";
+    const item = document.createElement("div");
+    item.className = "pl-item" + (_activePl === pl.id ? " active" : "");
+    item.dataset.id = pl.id;
+    item.innerHTML = `
+      <i class="ti ${icon}"></i>
+      <span class="pl-item-name">${esc(pl.name)}</span>
+      ${!pl.is_system ? `<button class="pl-del" title="Löschen" data-id="${pl.id}"><i class="ti ti-x"></i></button>` : ""}
+    `;
+    item.addEventListener("click", e => {
+      if (e.target.closest(".pl-del")) return;
+      applyPlaylist(pl);
+    });
+    const delBtn = item.querySelector(".pl-del");
+    if (delBtn) {
+      delBtn.addEventListener("click", async e => {
+        e.stopPropagation();
+        if (!confirm(`Playlist "${pl.name}" löschen?`)) return;
+        await fetch(`/api/playlists/${pl.id}`, {method: "DELETE"});
+        if (_activePl === pl.id) clearPlaylist();
+        await loadPlaylists();
+      });
+    }
+    (pl.is_system ? sysList : userList).appendChild(item);
+  });
+}
+
+function applyPlaylist(pl) {
+  _activePl = pl.id;
+
+  // System playlists: only set sort, clear all filters
+  if (pl.is_system) {
+    resetFilters();
+    state.sort = pl.sort;
+    $("sort-select").value = pl.sort;
+  } else {
+    // User playlist: restore saved filter state
+    let filters = {};
+    try { filters = JSON.parse(pl.filters || "{}"); } catch {}
+    resetFilters();
+    state.sort = pl.sort || "artist";
+    $("sort-select").value = state.sort;
+    Object.assign(state.filters, filters);
+    _restoreFilterUI(filters);
+  }
+
+  renderPlaylistSidebar();
+  loadTracks(1, true);
+}
+
+function clearPlaylist() {
+  _activePl = null;
+  renderPlaylistSidebar();
+}
+
+function resetFilters() {
+  state.query = "";
+  $("search").value = "";
+  state.filters = {
+    genre: "", decade: "", format: "",
+    min_dur: 0, max_dur: 0, min_bitrate: 0,
+    year_min: 0, year_max: 0,
+    bpm_min: 0, bpm_max: 0,
+    artist_query: "", title_query: "", album_query: "",
+    loved: false,
+  };
+}
+
+function _restoreFilterUI(filters) {
+  if (filters.artist_query) {
+    $("artist-search-panel").style.display = "block";
+    $("chip-artist-alle").classList.remove("active");
+    $("artist-search").value = filters.artist_query;
+  }
+  if (filters.title_query) {
+    $("title-search-panel").style.display = "block";
+    $("chip-title-alle").classList.remove("active");
+    $("title-search").value = filters.title_query;
+  }
+  if (filters.album_query) {
+    $("album-search-panel").style.display = "block";
+    $("chip-album-alle").classList.remove("active");
+    $("album-search").value = filters.album_query;
+  }
+  // Sliders, chips etc. — reset to defaults visually (filters applied via state)
+}
+
+// Show "Als Playlist speichern" button when filters/search are active
+function updateSavePlaylistBtn() {
+  const f = state.filters;
+  const hasFilter = state.query ||
+    f.genre || f.decade || f.format || f.artist_query || f.title_query || f.album_query ||
+    f.min_dur || f.max_dur || f.min_bitrate || f.year_min || f.year_max ||
+    f.bpm_min || f.bpm_max || f.loved ||
+    ["recent","top_played","newest_added","disco_top"].includes(state.sort);
+  const btn = $("btn-save-playlist");
+  btn.style.display = hasFilter ? "flex" : "none";
+}
+
+$("btn-save-playlist").addEventListener("click", async () => {
+  const name = prompt("Name für diese Playlist:");
+  if (!name?.trim()) return;
+  await fetch("/api/playlists", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      name: name.trim(),
+      filters: state.filters,
+      sort: state.sort,
+    })
+  });
+  await loadPlaylists();
+});
+
 // ── Current user / auth ───────────────────────────────────────────────────────
 let _me = null;
 
@@ -2486,7 +2668,7 @@ async function loadMe() {
     if (scanWrap) scanWrap.style.display = "none";
   }
 }
-loadMe();
+loadMe().then(() => loadPlaylists());
 
 // ── User dropdown toggle ──────────────────────────────────────────────────────
 $("btn-user-menu").onclick = (e) => {

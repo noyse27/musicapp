@@ -121,7 +121,29 @@ def init_db():
                 ip           TEXT PRIMARY KEY,
                 blocked_until REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS user_play_counts (
+                user_id        INTEGER NOT NULL,
+                track_id       INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+                count          INTEGER NOT NULL DEFAULT 0,
+                last_played_at REAL,
+                PRIMARY KEY (user_id, track_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_upc_user ON user_play_counts(user_id, count DESC);
+            CREATE INDEX IF NOT EXISTS idx_upc_recent ON user_play_counts(user_id, last_played_at DESC);
+
+            CREATE TABLE IF NOT EXISTS playlists (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_id   INTEGER,
+                name       TEXT    NOT NULL,
+                filters    TEXT    NOT NULL DEFAULT '{}',
+                sort       TEXT    NOT NULL DEFAULT 'artist',
+                is_system  INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT    DEFAULT (datetime('now'))
+            );
         """)
+        # Seed system playlists (idempotent)
+        _seed_system_playlists(conn)
         # Migrations (safe to run repeatedly)
         for migration in [
             "ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0",
@@ -131,6 +153,25 @@ def init_db():
                 conn.execute(migration)
             except Exception:
                 pass
+
+
+_SYSTEM_PLAYLISTS = [
+    ("Zuletzt gespielt",    "recent",       "{}"),
+    ("Meistgespielt",       "top_played",   "{}"),
+    ("Neueste 100",         "newest_added", "{}"),
+    ("Disco Hits",          "disco_top",    "{}"),
+]
+
+def _seed_system_playlists(conn):
+    existing = {r[0] for r in conn.execute(
+        "SELECT sort FROM playlists WHERE is_system=1"
+    ).fetchall()}
+    for name, sort, filters in _SYSTEM_PLAYLISTS:
+        if sort not in existing:
+            conn.execute(
+                "INSERT INTO playlists (owner_id, name, filters, sort, is_system) VALUES (NULL,?,?,?,1)",
+                (name, filters, sort)
+            )
 
 
 def _norm_text(value: str | None) -> str:
@@ -147,7 +188,8 @@ def search_tracks(query="", artist_query="", title_query="", album_query="",
                   year_min=None, year_max=None,
                   bpm_min=None, bpm_max=None,
                   page=1, per_page=50, sort="artist",
-                  count=True, loved_only=False, include_loved=False):
+                  count=True, loved_only=False, include_loved=False,
+                  user_id=None):
     params = []
     conditions = []
 
@@ -215,36 +257,62 @@ def search_tracks(query="", artist_query="", title_query="", album_query="",
     if loved_only:
         conditions.append("l.artist_norm IS NOT NULL")
 
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    # Play-count-based sort options — require JOIN on user_play_counts
+    _PC_SORTS = {"recent", "top_played", "newest_added", "disco_top"}
+    pc_join = ""
+    pc_select = "0 AS user_play_count, NULL AS last_played_at"
+    pc_uid = 0  # disco = user_id 0
 
-    sort_map = {
-        "artist": "t.artist, t.album, t.track_no",
-        "title":  "t.title",
-        "album":  "t.album, t.track_no",
-        "year":   "t.year DESC, t.artist",
-        "duration": "t.duration DESC",
-    }
-    order = sort_map.get(sort, sort_map["artist"])
+    if sort in _PC_SORTS:
+        if sort == "newest_added":
+            order_expr = "t.indexed_at DESC"
+        elif sort == "recent":
+            pc_uid = user_id or 0
+            pc_join = f"LEFT JOIN user_play_counts upc ON upc.track_id=t.id AND upc.user_id={int(pc_uid)}"
+            pc_select = "COALESCE(upc.count,0) AS user_play_count, upc.last_played_at"
+            conditions.append("upc.last_played_at IS NOT NULL")
+            order_expr = "upc.last_played_at DESC"
+        elif sort == "top_played":
+            pc_uid = user_id or 0
+            pc_join = f"LEFT JOIN user_play_counts upc ON upc.track_id=t.id AND upc.user_id={int(pc_uid)}"
+            pc_select = "COALESCE(upc.count,0) AS user_play_count, upc.last_played_at"
+            conditions.append("upc.count > 0")
+            order_expr = "upc.count DESC"
+        else:  # disco_top
+            pc_join = "LEFT JOIN user_play_counts upc ON upc.track_id=t.id AND upc.user_id=0"
+            pc_select = "COALESCE(upc.count,0) AS user_play_count, upc.last_played_at"
+            conditions.append("upc.count > 0")
+            order_expr = "upc.count DESC"
+        order = order_expr
+    else:
+        sort_map = {
+            "artist":   "t.artist, t.album, t.track_no",
+            "title":    "t.title",
+            "album":    "t.album, t.track_no",
+            "year":     "t.year DESC, t.artist",
+            "duration": "t.duration DESC",
+        }
+        order = sort_map.get(sort, sort_map["artist"])
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     offset = (page - 1) * per_page
 
     with db() as conn:
         rows = conn.execute(
             f"""SELECT t.id, t.path, t.title, t.artist, t.album, t.genre,
                        t.year, t.track_no, t.duration, t.bitrate, t.size,
-                       t.cover_hash, t.bpm, {loved_select}
-                FROM tracks t {loved_join} {where}
+                       t.cover_hash, t.bpm, {loved_select}, {pc_select}
+                FROM tracks t {loved_join} {pc_join} {where}
                 ORDER BY {order}
                 LIMIT ? OFFSET ?""",
             params + [per_page, offset],
         ).fetchall()
 
         if count:
-            # Full count only when requested (first page or filter change)
             total = conn.execute(
-                f"SELECT COUNT(*) FROM tracks t {loved_join} {where}", params
+                f"SELECT COUNT(*) FROM tracks t {loved_join} {pc_join} {where}", params
             ).fetchone()[0]
         else:
-            # Estimate: if we got a full page there are more; otherwise offset+len
             total = offset + len(rows) + (1 if len(rows) == per_page else 0)
 
     def fmt_duration(s):
@@ -456,3 +524,61 @@ def get_cover(hash_: str):
             "SELECT data, mime FROM covers WHERE hash = ?", (hash_,)
         ).fetchone()
     return (row["data"], row["mime"]) if row else (None, None)
+
+
+# ── Per-user play counts ──────────────────────────────────────────────────────
+
+def increment_user_play_count(user_id: int, track_id: int):
+    """Increment play count for a specific user (0 = Adolar Disco)."""
+    now = __import__("time").time()
+    with db() as conn:
+        conn.execute("""
+            INSERT INTO user_play_counts (user_id, track_id, count, last_played_at)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(user_id, track_id) DO UPDATE SET
+                count = count + 1,
+                last_played_at = excluded.last_played_at
+        """, (user_id, track_id, now))
+
+
+# ── Playlists ─────────────────────────────────────────────────────────────────
+
+def get_playlists(user_id: int) -> list[dict]:
+    """Return system playlists + playlists owned by user_id."""
+    with db() as conn:
+        rows = conn.execute(
+            """SELECT id, owner_id, name, filters, sort, is_system, created_at
+               FROM playlists
+               WHERE is_system=1 OR owner_id=?
+               ORDER BY is_system DESC, created_at ASC""",
+            (user_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def create_playlist(user_id: int, name: str, filters: str, sort: str) -> int:
+    with db() as conn:
+        cur = conn.execute(
+            "INSERT INTO playlists (owner_id, name, filters, sort) VALUES (?,?,?,?)",
+            (user_id, name, filters, sort)
+        )
+        return cur.lastrowid
+
+
+def delete_playlist(playlist_id: int, user_id: int) -> bool:
+    """Only owner can delete; system playlists cannot be deleted."""
+    with db() as conn:
+        cur = conn.execute(
+            "DELETE FROM playlists WHERE id=? AND owner_id=? AND is_system=0",
+            (playlist_id, user_id)
+        )
+    return cur.rowcount > 0
+
+
+def rename_playlist(playlist_id: int, user_id: int, name: str) -> bool:
+    with db() as conn:
+        cur = conn.execute(
+            "UPDATE playlists SET name=? WHERE id=? AND owner_id=? AND is_system=0",
+            (name, playlist_id, user_id)
+        )
+    return cur.rowcount > 0

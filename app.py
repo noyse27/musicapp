@@ -243,6 +243,39 @@ def api_users_set_download(user_id):
     _auth.set_allow_download(user_id, allow)
     return jsonify({"ok": True, "allow_download": allow})
 
+@app.get("/api/playlists")
+def api_playlists_list():
+    return jsonify(db.get_playlists(g.user["id"]))
+
+@app.post("/api/playlists")
+def api_playlists_create():
+    import json
+    data    = request.get_json(silent=True) or {}
+    name    = (data.get("name") or "").strip()
+    filters = data.get("filters", {})
+    sort    = data.get("sort", "artist")
+    if not name:
+        return jsonify({"error": "Name fehlt."}), 400
+    pid = db.create_playlist(g.user["id"], name, json.dumps(filters), sort)
+    return jsonify({"ok": True, "id": pid}), 201
+
+@app.delete("/api/playlists/<int:playlist_id>")
+def api_playlists_delete(playlist_id):
+    if not db.delete_playlist(playlist_id, g.user["id"]):
+        return jsonify({"error": "Nicht gefunden oder keine Berechtigung."}), 404
+    return jsonify({"ok": True})
+
+@app.patch("/api/playlists/<int:playlist_id>")
+def api_playlists_rename(playlist_id):
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name fehlt."}), 400
+    if not db.rename_playlist(playlist_id, g.user["id"], name):
+        return jsonify({"error": "Nicht gefunden oder keine Berechtigung."}), 404
+    return jsonify({"ok": True})
+
+
 @app.get("/api/admin/blocked-ips")
 @_auth.admin_required
 def api_blocked_ips():
@@ -309,6 +342,7 @@ def api_search():
     except ValueError:
         return jsonify({"error": "invalid numeric parameter"}), 400
 
+    user_id = g.user["id"] if g.user else None
     total, tracks = db.search_tracks(
         query=q, artist_query=artist_q, title_query=title_q, album_query=album_q,
         genre=genre, decade=decade, fmt=fmt,
@@ -317,6 +351,7 @@ def api_search():
         bpm_min=bpm_min, bpm_max=bpm_max,
         page=page, per_page=per_page, sort=sort, count=do_count,
         loved_only=loved, include_loved=bool(db.get_setting("lastfm_session_key")),
+        user_id=user_id,
     )
     return jsonify({
         "total": total,
@@ -542,19 +577,42 @@ def api_track_bpm(track_id):
 
 @app.post("/api/track/<int:track_id>/played")
 def api_track_played(track_id):
-    new_count, raw_path = db.increment_play_count(track_id)
-    if raw_path is None:
-        abort(404)
+    user = g.get("user")
+    if not user:
+        abort(401)
 
-    path = _safe_path(raw_path)
-    if path and os.path.isfile(path):
-        # Read current tag value and take MAX to protect against external changes
-        tag_count  = _read_play_count_tag(path)
-        new_count  = max(tag_count, new_count - 1) + 1  # MAX(tag, db_before) + 1
-        db.set_play_count(track_id, new_count)
-        _write_play_count_tag(path, new_count)
+    # Always record per-user play count
+    db.increment_user_play_count(user["id"], track_id)
 
-    return jsonify({"play_count": new_count})
+    # Only admin writes to the global counter and file tag
+    if user["role"] == "admin":
+        new_count, raw_path = db.increment_play_count(track_id)
+        if raw_path is None:
+            abort(404)
+        path = _safe_path(raw_path)
+        if path and os.path.isfile(path):
+            tag_count = _read_play_count_tag(path)
+            new_count = max(tag_count, new_count - 1) + 1
+            db.set_play_count(track_id, new_count)
+            _write_play_count_tag(path, new_count)
+    else:
+        # Verify track exists
+        with db.db() as conn:
+            if not conn.execute("SELECT 1 FROM tracks WHERE id=?", (track_id,)).fetchone():
+                abort(404)
+        new_count = None
+
+    return jsonify({"ok": True, "play_count": new_count})
+
+
+@app.post("/api/track/<int:track_id>/disco-played")
+def api_track_disco_played(track_id):
+    """Called by Adolar Disco — records play in disco counter (user_id=0), never writes file."""
+    with db.db() as conn:
+        if not conn.execute("SELECT 1 FROM tracks WHERE id=?", (track_id,)).fetchone():
+            abort(404)
+    db.increment_user_play_count(0, track_id)
+    return jsonify({"ok": True})
 
 
 def _read_play_count_tag(path: str) -> int:
