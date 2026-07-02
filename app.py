@@ -243,6 +243,108 @@ def api_users_set_download(user_id):
     _auth.set_allow_download(user_id, allow)
     return jsonify({"ok": True, "allow_download": allow})
 
+@app.get("/api/me-optional")
+def api_me_optional():
+    """Like /api/me but returns null instead of 401 — used by Radio Companion."""
+    token = request.cookies.get(_auth.SESSION_COOKIE)
+    if token:
+        user = _auth.get_user_by_token(token)
+        if user:
+            is_admin = user["role"] == "admin"
+            return jsonify({
+                "id":             user["id"],
+                "username":       user["username"],
+                "role":           user["role"],
+                "allow_download": is_admin or bool(user["allow_download"]),
+            })
+    return jsonify(None)
+
+
+@app.post("/api/radio/bookmark/<int:track_id>")
+def api_radio_bookmark(track_id):
+    token = request.cookies.get(_auth.SESSION_COOKIE)
+    user  = _auth.get_user_by_token(token) if token else None
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    with db.db() as conn:
+        if not conn.execute("SELECT 1 FROM tracks WHERE id=?", (track_id,)).fetchone():
+            abort(404)
+    pl_id = db.get_or_create_radio_favorites(user["id"])
+    db.add_track_to_playlist(pl_id, track_id)
+    return jsonify({"ok": True, "playlist_id": pl_id})
+
+
+@app.get("/api/playlists/memberships")
+def api_playlist_memberships():
+    ids_raw = request.args.get("ids", "")
+    try:
+        track_ids = [int(x) for x in ids_raw.split(",") if x.strip().isdigit()]
+    except ValueError:
+        return jsonify({}), 400
+    return jsonify(db.get_track_playlist_memberships(g.user["id"], track_ids))
+
+
+@app.post("/api/playlists/<int:playlist_id>/tracks")
+def api_playlist_add_track(playlist_id):
+    data     = request.get_json(silent=True) or {}
+    track_id = data.get("track_id")
+    if not isinstance(track_id, int):
+        return jsonify({"error": "track_id fehlt."}), 400
+    # Verify ownership
+    pl = db.get_user_by_id(g.user["id"])  # just check user exists
+    with db.db() as conn:
+        row = conn.execute(
+            "SELECT id FROM playlists WHERE id=? AND owner_id=?",
+            (playlist_id, g.user["id"])
+        ).fetchone()
+    if not row:
+        return jsonify({"error": "Playlist nicht gefunden."}), 404
+    db.add_track_to_playlist(playlist_id, track_id)
+    return jsonify({"ok": True})
+
+
+@app.get("/api/playlists/<int:playlist_id>/tracks")
+def api_playlist_tracks(playlist_id):
+    tracks = db.get_playlist_tracks(playlist_id, g.user["id"])
+    if tracks is None:
+        return jsonify({"error": "Nicht gefunden."}), 404
+    return jsonify(tracks)
+
+
+@app.get("/api/playlists")
+def api_playlists_list():
+    return jsonify(db.get_playlists(g.user["id"]))
+
+@app.post("/api/playlists")
+def api_playlists_create():
+    import json
+    data    = request.get_json(silent=True) or {}
+    name    = (data.get("name") or "").strip()
+    type_   = data.get("type", "smart")
+    filters = data.get("filters", {})
+    sort    = data.get("sort", "artist")
+    if not name:
+        return jsonify({"error": "Name fehlt."}), 400
+    pid = db.create_playlist(g.user["id"], name, json.dumps(filters), sort, type_)
+    return jsonify({"ok": True, "id": pid}), 201
+
+@app.delete("/api/playlists/<int:playlist_id>")
+def api_playlists_delete(playlist_id):
+    if not db.delete_playlist(playlist_id, g.user["id"]):
+        return jsonify({"error": "Nicht gefunden oder keine Berechtigung."}), 404
+    return jsonify({"ok": True})
+
+@app.patch("/api/playlists/<int:playlist_id>")
+def api_playlists_rename(playlist_id):
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name fehlt."}), 400
+    if not db.rename_playlist(playlist_id, g.user["id"], name):
+        return jsonify({"error": "Nicht gefunden oder keine Berechtigung."}), 404
+    return jsonify({"ok": True})
+
+
 @app.get("/api/admin/blocked-ips")
 @_auth.admin_required
 def api_blocked_ips():
@@ -256,6 +358,10 @@ def api_unblock_ip(ip):
 
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
+
+@app.route("/", methods=["HEAD"])
+def index_head():
+    return "", 200
 
 @app.get("/")
 def index():
@@ -309,6 +415,7 @@ def api_search():
     except ValueError:
         return jsonify({"error": "invalid numeric parameter"}), 400
 
+    user_id = g.user["id"] if g.user else None
     total, tracks = db.search_tracks(
         query=q, artist_query=artist_q, title_query=title_q, album_query=album_q,
         genre=genre, decade=decade, fmt=fmt,
@@ -317,6 +424,7 @@ def api_search():
         bpm_min=bpm_min, bpm_max=bpm_max,
         page=page, per_page=per_page, sort=sort, count=do_count,
         loved_only=loved, include_loved=bool(db.get_setting("lastfm_session_key")),
+        user_id=user_id,
     )
     return jsonify({
         "total": total,
@@ -542,19 +650,42 @@ def api_track_bpm(track_id):
 
 @app.post("/api/track/<int:track_id>/played")
 def api_track_played(track_id):
-    new_count, raw_path = db.increment_play_count(track_id)
-    if raw_path is None:
-        abort(404)
+    user = g.get("user")
+    if not user:
+        abort(401)
 
-    path = _safe_path(raw_path)
-    if path and os.path.isfile(path):
-        # Read current tag value and take MAX to protect against external changes
-        tag_count  = _read_play_count_tag(path)
-        new_count  = max(tag_count, new_count - 1) + 1  # MAX(tag, db_before) + 1
-        db.set_play_count(track_id, new_count)
-        _write_play_count_tag(path, new_count)
+    # Always record per-user play count
+    db.increment_user_play_count(user["id"], track_id)
 
-    return jsonify({"play_count": new_count})
+    # Only admin writes to the global counter and file tag
+    if user["role"] == "admin":
+        new_count, raw_path = db.increment_play_count(track_id)
+        if raw_path is None:
+            abort(404)
+        path = _safe_path(raw_path)
+        if path and os.path.isfile(path):
+            tag_count = _read_play_count_tag(path)
+            new_count = max(tag_count, new_count - 1) + 1
+            db.set_play_count(track_id, new_count)
+            _write_play_count_tag(path, new_count)
+    else:
+        # Verify track exists
+        with db.db() as conn:
+            if not conn.execute("SELECT 1 FROM tracks WHERE id=?", (track_id,)).fetchone():
+                abort(404)
+        new_count = None
+
+    return jsonify({"ok": True, "play_count": new_count})
+
+
+@app.post("/api/track/<int:track_id>/disco-played")
+def api_track_disco_played(track_id):
+    """Called by Adolar Disco — records play in disco counter (user_id=0), never writes file."""
+    with db.db() as conn:
+        if not conn.execute("SELECT 1 FROM tracks WHERE id=?", (track_id,)).fetchone():
+            abort(404)
+    db.increment_user_play_count(0, track_id)
+    return jsonify({"ok": True})
 
 
 def _read_play_count_tag(path: str) -> int:

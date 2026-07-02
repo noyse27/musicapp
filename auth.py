@@ -24,9 +24,12 @@ BF_HARD_BLOCK    = 253402300800  # permanent (year 9999); admin must unblock man
 PUBLIC_PREFIXES = (
     "/login", "/setup",
     "/api/stream/", "/api/random", "/api/cover/",
-    "/api/stats", "/api/disco-status",
+    "/api/stats", "/api/disco-status", "/api/me-optional",
+    "/api/radio/",
     "/radio", "/static/",
 )
+# Disco-specific endpoints (no session needed, called by Disco server)
+PUBLIC_SUFFIXES = ("/disco-played",)
 
 # ── In-memory brute-force tracker ─────────────────────────────────────────────
 _bf_lock  = threading.Lock()
@@ -198,11 +201,16 @@ def _is_public(path: str) -> bool:
     for prefix in PUBLIC_PREFIXES:
         if path == prefix or path.startswith(prefix):
             return True
+    for suffix in PUBLIC_SUFFIXES:
+        if path.endswith(suffix):
+            return True
     return False
 
 def before_request():
     """Attach current user to g; redirect unauthenticated requests."""
     g.user = None
+    if request.method == "HEAD":
+        return
     if _is_public(request.path):
         return
 
