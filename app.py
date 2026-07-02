@@ -274,6 +274,35 @@ def api_radio_bookmark(track_id):
     return jsonify({"ok": True, "playlist_id": pl_id})
 
 
+@app.get("/api/playlists/memberships")
+def api_playlist_memberships():
+    ids_raw = request.args.get("ids", "")
+    try:
+        track_ids = [int(x) for x in ids_raw.split(",") if x.strip().isdigit()]
+    except ValueError:
+        return jsonify({}), 400
+    return jsonify(db.get_track_playlist_memberships(g.user["id"], track_ids))
+
+
+@app.post("/api/playlists/<int:playlist_id>/tracks")
+def api_playlist_add_track(playlist_id):
+    data     = request.get_json(silent=True) or {}
+    track_id = data.get("track_id")
+    if not isinstance(track_id, int):
+        return jsonify({"error": "track_id fehlt."}), 400
+    # Verify ownership
+    pl = db.get_user_by_id(g.user["id"])  # just check user exists
+    with db.db() as conn:
+        row = conn.execute(
+            "SELECT id FROM playlists WHERE id=? AND owner_id=?",
+            (playlist_id, g.user["id"])
+        ).fetchone()
+    if not row:
+        return jsonify({"error": "Playlist nicht gefunden."}), 404
+    db.add_track_to_playlist(playlist_id, track_id)
+    return jsonify({"ok": True})
+
+
 @app.get("/api/playlists/<int:playlist_id>/tracks")
 def api_playlist_tracks(playlist_id):
     tracks = db.get_playlist_tracks(playlist_id, g.user["id"])
@@ -291,11 +320,12 @@ def api_playlists_create():
     import json
     data    = request.get_json(silent=True) or {}
     name    = (data.get("name") or "").strip()
+    type_   = data.get("type", "smart")
     filters = data.get("filters", {})
     sort    = data.get("sort", "artist")
     if not name:
         return jsonify({"error": "Name fehlt."}), 400
-    pid = db.create_playlist(g.user["id"], name, json.dumps(filters), sort)
+    pid = db.create_playlist(g.user["id"], name, json.dumps(filters), sort, type_)
     return jsonify({"ok": True, "id": pid}), 201
 
 @app.delete("/api/playlists/<int:playlist_id>")
@@ -328,6 +358,10 @@ def api_unblock_ip(ip):
 
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
+
+@app.route("/", methods=["HEAD"])
+def index_head():
+    return "", 200
 
 @app.get("/")
 def index():

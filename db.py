@@ -593,6 +593,25 @@ def get_or_create_radio_favorites(user_id: int) -> int:
         return cur.lastrowid
 
 
+def get_track_playlist_memberships(user_id: int, track_ids: list[int]) -> dict[int, list[int]]:
+    """Returns {track_id: [playlist_id, ...]} for all personal playlists of user."""
+    if not track_ids:
+        return {}
+    placeholders = ",".join("?" * len(track_ids))
+    with db() as conn:
+        rows = conn.execute(
+            f"""SELECT pt.track_id, pt.playlist_id
+                FROM playlist_tracks pt
+                JOIN playlists p ON p.id = pt.playlist_id
+                WHERE p.owner_id = ? AND pt.track_id IN ({placeholders})""",
+            [user_id] + list(track_ids)
+        ).fetchall()
+    result: dict[int, list[int]] = {}
+    for r in rows:
+        result.setdefault(r["track_id"], []).append(r["playlist_id"])
+    return result
+
+
 def add_track_to_playlist(playlist_id: int, track_id: int):
     with db() as conn:
         conn.execute(

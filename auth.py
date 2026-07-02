@@ -209,6 +209,8 @@ def _is_public(path: str) -> bool:
 def before_request():
     """Attach current user to g; redirect unauthenticated requests."""
     g.user = None
+    if request.method == "HEAD":
+        return
     if _is_public(request.path):
         return
 

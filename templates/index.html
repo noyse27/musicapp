@@ -426,6 +426,31 @@
     }
     .btn-love:hover { color: #e03e3e; transform: scale(1.15); }
     .btn-love.loved { color: #e03e3e; }
+    /* Bookmark button */
+    .btn-bookmark {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-tertiary); font-size: 16px; padding: 4px;
+      line-height: 1; transition: color .15s, transform .15s;
+      flex-shrink: 0; position: relative;
+    }
+    .btn-bookmark:hover { color: var(--accent); transform: scale(1.15); }
+    .btn-bookmark.bookmarked { color: var(--accent); }
+    /* Bookmark dropdown */
+    .bm-dropdown {
+      position: absolute; right: 0; top: calc(100% + 4px);
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      min-width: 200px; z-index: 1000; overflow: hidden;
+    }
+    .bm-dropdown-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; cursor: pointer;
+      font-size: 13px; color: var(--text-secondary);
+      transition: background .1s, color .1s; white-space: nowrap;
+    }
+    .bm-dropdown-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
+    .bm-dropdown-item i { font-size: 14px; flex-shrink: 0; }
+    .bm-dropdown-sep { height: 1px; background: var(--border); margin: 4px 0; }
     #player-love {
       font-size: 20px;
       padding: 6px;
@@ -855,13 +880,20 @@
     #btn-miniplayer:hover { background: var(--bg-secondary); }
 
     /* ── Language Switch ─────────────────────────────────── */
+    #lang-switch {
+      display: flex; align-items: center;
+      border: 0.5px solid var(--border-subtle); border-radius: 6px;
+      overflow: hidden; flex-shrink: 0;
+    }
     .lang-btn {
       background: none; border: none; cursor: pointer;
-      font-size: 18px; padding: 2px 4px; border-radius: 4px;
-      opacity: 0.4; transition: opacity .15s;
+      font-size: var(--text-sm); padding: 4px 8px;
+      color: var(--text-tertiary); font-weight: 500;
+      transition: background .1s, color .1s;
+      line-height: 1;
     }
-    .lang-btn:hover { opacity: 0.8; }
-    .lang-btn.active { opacity: 1; }
+    .lang-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
+    .lang-btn.active { background: var(--bg-secondary); color: var(--text-primary); }
 
     /* ── Empty state ──────────────────────────────────── */
     .empty-state {
@@ -886,8 +918,8 @@
     <span>Adolar</span>
     <button id="btn-about" title="Über Adolar" onclick="document.getElementById('about-modal').style.display='flex'">?</button>
     <span id="disco-badge" title="Adolar Disco verbunden"
-          style="display:none;font-size:11px;background:rgba(127,119,221,0.2);
-                 color:#A09AFF;border:1px solid rgba(127,119,221,0.4);
+          style="display:none;font-size:11px;background:#7F77DD;
+                 color:#fff;border:1px solid #7F77DD;
                  border-radius:99px;padding:2px 8px;margin-left:4px;
                  animation:discoPulse 2s ease-in-out infinite">
       🪩 Disco
@@ -895,8 +927,8 @@
   </div>
   <div id="topbar-meta">Lade…</div>
   <div id="lastfm-status" style="flex-shrink:0;display:flex;align-items:center;gap:8px;font-size:var(--text-sm);color:var(--text-tertiary)"></div>
-  <div id="lang-switch" style="display:flex;gap:4px;flex-shrink:0">
-    <button class="lang-btn" id="lang-de" title="Deutsch" onclick="setLang('de')">🇩🇪</button>
+  <div id="lang-switch">
+    <button class="lang-btn" id="lang-de" title="Deutsch" onclick="setLang('de')">DE</button>
     <button class="lang-btn" id="lang-en" title="English" onclick="setLang('en')">EN</button>
   </div>
   <button id="btn-miniplayer" title="Mini-Player abdocken">
@@ -1088,9 +1120,6 @@
       <span class="filter-label">Playlists</span>
       <div id="playlist-system"></div>
       <div id="playlist-user" style="margin-top:4px"></div>
-      <button id="btn-save-playlist">
-        <i class="ti ti-bookmark-plus"></i> Als Playlist speichern
-      </button>
     </div>
 
     <div class="sidebar-scan">
@@ -1612,6 +1641,7 @@ async function loadTracks(page = 1, forceCount = false) {
   _setSearching(false);
   renderTracks();
   renderPagination();
+  fetchMemberships(state.tracks);
 
   // Scroll to top of results
   document.getElementById('track-list')?.scrollTo({ top: 0, behavior: 'instant' });
@@ -1718,6 +1748,19 @@ function renderTracks(overrideTracks) {
         lfmToggleLove(track, loveBtn);
       });
       row.appendChild(loveBtn);
+    }
+
+    // Bookmark button (alle eingeloggten Nutzer)
+    if (_me) {
+      const bmBtn = document.createElement("button");
+      bmBtn.className = "btn-bookmark";
+      bmBtn.dataset.trackId = track.id;
+      _applyBookmarkState(bmBtn, track.id);
+      bmBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        _openBookmarkDropdown(bmBtn, track.id);
+      });
+      row.appendChild(bmBtn);
     }
 
     row.addEventListener("click", () => playTrack(i));
@@ -2502,6 +2545,113 @@ const SYSTEM_SORT_ICONS = {
 
 let _playlists = [];
 let _activePl  = null;
+let _trackMemberships = {}; // { track_id: [playlist_id, ...] }
+
+// ── Bookmark helpers ──────────────────────────────────────
+async function fetchMemberships(tracks) {
+  if (!_me || !tracks.length) return;
+  const ids = tracks.map(tr => tr.id).join(",");
+  try {
+    const r = await fetch(`/api/playlists/memberships?ids=${ids}`);
+    const data = await r.json();
+    _trackMemberships = data;
+    // Update all bookmark buttons already in the DOM
+    document.querySelectorAll(".btn-bookmark").forEach(btn => {
+      _applyBookmarkState(btn, Number(btn.dataset.trackId));
+    });
+  } catch {}
+}
+
+function _applyBookmarkState(btn, trackId) {
+  const plIds = _trackMemberships[trackId] || [];
+  const bookmarked = plIds.length > 0;
+  btn.classList.toggle("bookmarked", bookmarked);
+  btn.innerHTML = bookmarked
+    ? `<i class="ti ti-bookmark-filled"></i>`
+    : `<i class="ti ti-bookmark"></i>`;
+  // Tooltip: list playlist names
+  if (bookmarked) {
+    const names = plIds.map(id => {
+      const pl = _playlists.find(p => p.id === id);
+      return pl ? pl.name : "?";
+    }).join(", ");
+    btn.title = names;
+  } else {
+    btn.title = lang === "de" ? "Zu Playlist hinzufügen" : "Add to playlist";
+  }
+}
+
+let _bmDropdownOpen = null;
+function _closeBookmarkDropdown() {
+  if (_bmDropdownOpen) { _bmDropdownOpen.remove(); _bmDropdownOpen = null; }
+}
+
+function _openBookmarkDropdown(btn, trackId) {
+  if (_bmDropdownOpen) { _closeBookmarkDropdown(); return; }
+  const userPlaylists = _playlists.filter(p => !p.is_system && p.type !== "static_radio");
+
+  const dd = document.createElement("div");
+  dd.className = "bm-dropdown";
+  _bmDropdownOpen = dd;
+
+  // "Neue Playlist erstellen"
+  const newItem = document.createElement("div");
+  newItem.className = "bm-dropdown-item";
+  newItem.innerHTML = `<i class="ti ti-plus"></i><span>${lang === "de" ? "Neue Playlist erstellen" : "New playlist"}</span>`;
+  newItem.addEventListener("click", async e => {
+    e.stopPropagation();
+    _closeBookmarkDropdown();
+    const name = prompt(lang === "de" ? "Name der neuen Playlist:" : "New playlist name:");
+    if (!name?.trim()) return;
+    const r = await fetch("/api/playlists", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ name: name.trim(), type: "static" })
+    });
+    if (!r.ok) return;
+    const pl = await r.json();
+    await fetch(`/api/playlists/${pl.id}/tracks`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ track_id: trackId })
+    });
+    _trackMemberships[trackId] = [...(_trackMemberships[trackId] || []), pl.id];
+    await loadPlaylists();
+    document.querySelectorAll(`.btn-bookmark[data-track-id="${trackId}"]`).forEach(b => _applyBookmarkState(b, trackId));
+  });
+  dd.appendChild(newItem);
+
+  if (userPlaylists.length) {
+    const sep = document.createElement("div");
+    sep.className = "bm-dropdown-sep";
+    dd.appendChild(sep);
+
+    userPlaylists.forEach(pl => {
+      const alreadyIn = (_trackMemberships[trackId] || []).includes(pl.id);
+      const item = document.createElement("div");
+      item.className = "bm-dropdown-item";
+      item.innerHTML = `<i class="ti ${alreadyIn ? "ti-check" : "ti-playlist"}"></i><span>${esc(pl.name)}</span>`;
+      if (!alreadyIn) {
+        item.addEventListener("click", async e => {
+          e.stopPropagation();
+          _closeBookmarkDropdown();
+          await fetch(`/api/playlists/${pl.id}/tracks`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ track_id: trackId })
+          });
+          _trackMemberships[trackId] = [...(_trackMemberships[trackId] || []), pl.id];
+          document.querySelectorAll(`.btn-bookmark[data-track-id="${trackId}"]`).forEach(b => _applyBookmarkState(b, trackId));
+        });
+      }
+      dd.appendChild(item);
+    });
+  }
+
+  btn.appendChild(dd);
+  // Close on outside click
+  setTimeout(() => document.addEventListener("click", _closeBookmarkDropdown, { once: true }), 0);
+}
 
 async function loadPlaylists() {
   try {
@@ -2531,6 +2681,7 @@ function renderPlaylistSidebar() {
     `;
     item.addEventListener("click", e => {
       if (e.target.closest(".pl-del")) return;
+      if (_activePl === pl.id) { clearPlaylist(); loadTracks(1, true); return; }
       applyPlaylist(pl);
     });
     const delBtn = item.querySelector(".pl-del");
@@ -2562,6 +2713,7 @@ async function applyPlaylist(pl) {
       state.page  = 1;
       renderTracks(tracks);
       renderPagination();
+      fetchMemberships(tracks);
     } catch {}
     _setSearching(false);
     return;
@@ -2623,32 +2775,7 @@ function _restoreFilterUI(filters) {
   // Sliders, chips etc. — reset to defaults visually (filters applied via state)
 }
 
-// Show "Als Playlist speichern" button when filters/search are active
-function updateSavePlaylistBtn() {
-  const f = state.filters;
-  const hasFilter = state.query ||
-    f.genre || f.decade || f.format || f.artist_query || f.title_query || f.album_query ||
-    f.min_dur || f.max_dur || f.min_bitrate || f.year_min || f.year_max ||
-    f.bpm_min || f.bpm_max || f.loved ||
-    ["recent","top_played","newest_added","disco_top"].includes(state.sort);
-  const btn = $("btn-save-playlist");
-  btn.style.display = hasFilter ? "flex" : "none";
-}
-
-$("btn-save-playlist").addEventListener("click", async () => {
-  const name = prompt("Name für diese Playlist:");
-  if (!name?.trim()) return;
-  await fetch("/api/playlists", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      name: name.trim(),
-      filters: state.filters,
-      sort: state.sort,
-    })
-  });
-  await loadPlaylists();
-});
+function updateSavePlaylistBtn() { /* removed */ }
 
 // ── Current user / auth ───────────────────────────────────────────────────────
 let _me = null;
