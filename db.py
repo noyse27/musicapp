@@ -100,6 +100,27 @@ def init_db():
                 synced_at   REAL DEFAULT (unixepoch()),
                 PRIMARY KEY (artist_norm, title_norm)
             );
+
+            CREATE TABLE IF NOT EXISTS users (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                username             TEXT    NOT NULL UNIQUE,
+                password_hash        TEXT    NOT NULL,
+                role                 TEXT    NOT NULL DEFAULT 'user',
+                allow_download       INTEGER NOT NULL DEFAULT 0,
+                must_change_password INTEGER NOT NULL DEFAULT 1,
+                created_at           TEXT    DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                token      TEXT    PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                expires_at REAL    NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS login_blocks (
+                ip           TEXT PRIMARY KEY,
+                blocked_until REAL NOT NULL
+            );
         """)
         # Migrations (safe to run repeatedly)
         for migration in [
