@@ -22,6 +22,13 @@ A self-hosted music archive web app for Synology NAS (or any Docker host). Brows
 - **Background scanner** — indexes library without blocking UI, skips unchanged files (mtime), generates cover thumbnails after scan
 - **Last.fm scrobbling** — auto-scrobble + love tracks; loved status cached locally for instant display (no per-page API calls)
 - **Adolar Disco badge** — shows 🪩 Disco in topbar when Adolar Disco is connected
+- **User authentication** — first-run setup, login with remember-me, brute-force protection (IP ban after 10 failed attempts), admin-managed user accounts
+- **Per-user permissions** — admin controls download access per user; Last.fm and scan functions are admin-only
+- **Per-user play counts** — each user tracks their own play history; Adolar Disco plays stored separately (never written to file tags)
+- **Playlists** — smart playlists (saved filter/sort state) and static playlists; 4 system playlists for all users (Recently played, Most played, Newest 100, Disco Hits)
+- **Bookmark button** — add any track to a personal playlist directly from the track list; create new playlists on the fly
+- **Radio bookmarks** — log in via Adolar Radio companion to bookmark tracks into a personal "Radio Favourites" playlist
+- **DE / EN interface** — language switch in topbar
 
 ## Quick Start (Docker)
 
@@ -70,12 +77,17 @@ Cover images failing with `--verbose` are corrupt embedded tags — normal, they
 Download the latest `.exe` from [Releases](https://github.com/noyse27/adolar/releases).
 Enter your Adolar server URL in the settings dialog, click Save & Start — radio begins immediately.
 
+## First Run
+
+On first start, navigate to `/setup` to create the admin account. All subsequent users are added by the admin via the user management panel (topbar → admin menu).
+
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `MUSIC_ROOT` | `/music` | Path to music library |
 | `DB_PATH` | `/data/adolar.db` | SQLite database path |
+| `SECRET_KEY` | random | Flask session secret — set a fixed value to survive restarts |
 | `LASTFM_API_KEY` | — | Last.fm API key (optional) |
 | `LASTFM_API_SECRET` | — | Last.fm API secret (optional) |
 | `CORS_ORIGINS` | `` | Allowed CORS origins (space-separated) |
@@ -88,10 +100,17 @@ Enter your Adolar server URL in the settings dialog, click Save & Start — radi
 | GET | `/api/random?count=N` | N random tracks |
 | GET | `/api/stream/<id>` | Stream audio (range requests supported) |
 | GET | `/api/cover/<hash>` | Cover thumbnail (80×80 WebP); `?full=1` for original |
-| POST | `/api/scan/start` | Start library scan |
-| POST | `/api/scan/bpm-tags` | Read BPM from file tags into DB |
-| POST | `/api/scan/bpm` | Background librosa BPM analysis |
+| POST | `/api/scan/start` | Start library scan (admin only) |
+| POST | `/api/scan/bpm-tags` | Read BPM from file tags into DB (admin only) |
+| POST | `/api/scan/bpm` | Background librosa BPM analysis (admin only) |
 | POST | `/api/track/<id>/bpm` | Write BPM value (used by Adolar Disco) |
+| POST | `/api/track/<id>/played` | Increment per-user play count (auth required) |
+| POST | `/api/track/<id>/disco-played` | Increment Disco play count (public, never writes file) |
 | GET | `/api/disco-status` | Check if Adolar Disco is connected |
+| GET | `/api/playlists` | List user's playlists (auth required) |
+| POST | `/api/playlists` | Create playlist (auth required) |
+| POST | `/api/playlists/<id>/tracks` | Add track to static playlist (auth required) |
+| GET | `/api/me` | Current user info (auth required) |
+| GET | `/api/me-optional` | Current user info or null (public) |
 
 © PolzeSoft 2026 · [polze.net](https://polze.net) · adolar@polze.net

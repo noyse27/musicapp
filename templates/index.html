@@ -438,8 +438,8 @@
     /* Bookmark dropdown */
     .bm-dropdown {
       position: absolute; right: 0; top: calc(100% + 4px);
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      background: #1e1e2e; border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.7);
       min-width: 200px; z-index: 1000; overflow: hidden;
     }
     .bm-dropdown-item {
@@ -1275,8 +1275,13 @@ const LANG = {
     lfm_unlove:       "Nicht mehr mögen (Last.fm)",
     lfm_connect:      "Last.fm verbinden",
     lfm_disconnect:   "Trennen",
-    lfm_loved_filter: "Loved in Last.fm",
-    lfm_loved_sync:   "Loved wird geladen…",
+    lfm_loved_filter:   "Loved in Last.fm",
+    lfm_loved_sync:     "Loved wird geladen…",
+    bm_add:             "Zu Playlist hinzufügen",
+    bm_new_playlist:    "Neue Playlist erstellen",
+    bm_new_prompt:      "Name der neuen Playlist:",
+    pl_delete_confirm:  (name) => `Playlist „${name}" löschen?`,
+    user_delete_confirm: "Benutzer wirklich löschen?",
   },
   en: {
     loading:          "Loading…",
@@ -1328,8 +1333,13 @@ const LANG = {
     lfm_unlove:       "Unlove on Last.fm",
     lfm_connect:      "Connect Last.fm",
     lfm_disconnect:   "Disconnect",
-    lfm_loved_filter: "Loved in Last.fm",
-    lfm_loved_sync:   "Loading loved…",
+    lfm_loved_filter:    "Loved in Last.fm",
+    lfm_loved_sync:      "Loading loved…",
+    bm_add:              "Add to playlist",
+    bm_new_playlist:     "New playlist",
+    bm_new_prompt:       "New playlist name:",
+    pl_delete_confirm:   (name) => `Delete playlist "${name}"?`,
+    user_delete_confirm: "Really delete user?",
   },
 };
 
@@ -2577,7 +2587,7 @@ function _applyBookmarkState(btn, trackId) {
     }).join(", ");
     btn.title = names;
   } else {
-    btn.title = lang === "de" ? "Zu Playlist hinzufügen" : "Add to playlist";
+    btn.title = t().bm_add;
   }
 }
 
@@ -2597,11 +2607,11 @@ function _openBookmarkDropdown(btn, trackId) {
   // "Neue Playlist erstellen"
   const newItem = document.createElement("div");
   newItem.className = "bm-dropdown-item";
-  newItem.innerHTML = `<i class="ti ti-plus"></i><span>${lang === "de" ? "Neue Playlist erstellen" : "New playlist"}</span>`;
+  newItem.innerHTML = `<i class="ti ti-plus"></i><span>${t().bm_new_playlist}</span>`;
   newItem.addEventListener("click", async e => {
     e.stopPropagation();
     _closeBookmarkDropdown();
-    const name = prompt(lang === "de" ? "Name der neuen Playlist:" : "New playlist name:");
+    const name = prompt(t().bm_new_prompt);
     if (!name?.trim()) return;
     const r = await fetch("/api/playlists", {
       method: "POST",
@@ -2688,7 +2698,7 @@ function renderPlaylistSidebar() {
     if (delBtn) {
       delBtn.addEventListener("click", async e => {
         e.stopPropagation();
-        if (!confirm(`Playlist "${pl.name}" löschen?`)) return;
+        if (!confirm(t().pl_delete_confirm(pl.name))) return;
         await fetch(`/api/playlists/${pl.id}`, {method: "DELETE"});
         if (_activePl === pl.id) clearPlaylist();
         await loadPlaylists();
@@ -2900,7 +2910,7 @@ async function refreshUserList() {
   // Delete user
   list.querySelectorAll(".del-user-btn").forEach(btn => {
     btn.onclick = async () => {
-      if (!confirm("Benutzer wirklich löschen?")) return;
+      if (!confirm(t().user_delete_confirm)) return;
       await fetch(`/api/users/${btn.dataset.uid}`, {method: "DELETE"});
       await refreshUserList();
     };
