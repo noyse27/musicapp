@@ -1635,29 +1635,31 @@ function renderTracks() {
     });
     row.appendChild(playBtn);
 
-    // Download-Button
-    const dlBtn = document.createElement("button");
-    dlBtn.className = "track-play-btn";
-    dlBtn.title = basket.has(track.id) ? t().basket_rm : t().basket_add;
-    dlBtn.innerHTML = basket.has(track.id)
-      ? `<i class="ti ti-shopping-cart-off" style="color:var(--accent)"></i>`
-      : `<i class="ti ti-download"></i>`;
-    dlBtn.addEventListener("click", e => {
-      e.stopPropagation();
-      if (basket.has(track.id)) {
-        basket.delete(track.id);
-        basketTracks.delete(track.id);
-      } else {
-        basket.add(track.id);
-        basketTracks.set(track.id, track);
-      }
-      updateBasketUI();
-      renderTracks();
-    });
-    row.appendChild(dlBtn);
+    // Download-Button (nur wenn Download erlaubt)
+    if (_me && _me.allow_download) {
+      const dlBtn = document.createElement("button");
+      dlBtn.className = "track-play-btn";
+      dlBtn.title = basket.has(track.id) ? t().basket_rm : t().basket_add;
+      dlBtn.innerHTML = basket.has(track.id)
+        ? `<i class="ti ti-shopping-cart-off" style="color:var(--accent)"></i>`
+        : `<i class="ti ti-download"></i>`;
+      dlBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        if (basket.has(track.id)) {
+          basket.delete(track.id);
+          basketTracks.delete(track.id);
+        } else {
+          basket.add(track.id);
+          basketTracks.set(track.id, track);
+        }
+        updateBasketUI();
+        renderTracks();
+      });
+      row.appendChild(dlBtn);
+    }
 
-    // Love button (Last.fm)
-    if (lfm.connected) {
+    // Love button (Last.fm — nur für Admin)
+    if (lfm.connected && _me && _me.role === "admin") {
       const loveBtn = document.createElement("button");
       const loveKey = `${track.artist}||${track.title}`;
       const isLoved = Boolean(track.loved || lfm.lovedCache.get(loveKey));
