@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adolar – Anmelden</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #7F77DD; --accent-border: #AFA9EC;
+      --bg-primary: #30302E; --bg-secondary: #3A3A38; --bg-tertiary: #1E1E1C;
+      --text-primary: #ECECEC; --text-secondary: #9A9A96; --text-tertiary: #5C5C58;
+      --border-subtle: #3E3E3C;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg-tertiary); color: var(--text-primary);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+    .card {
+      background: var(--bg-primary); border: 0.5px solid var(--border-subtle);
+      border-radius: 12px; padding: 40px; width: 360px;
+    }
+    .logo {
+      font-family: "Orbitron", sans-serif; font-size: 22px; font-weight: 700;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--accent) 0%, #b8b4f0 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 8px;
+    }
+    .subtitle { font-size: 13px; color: var(--text-secondary); margin-bottom: 28px; }
+    label { display: block; font-size: 12px; color: var(--text-tertiary); margin-bottom: 5px; margin-top: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+    input[type=text], input[type=password] {
+      width: 100%; padding: 9px 12px; background: var(--bg-secondary);
+      border: 0.5px solid var(--border-subtle); border-radius: 8px;
+      color: var(--text-primary); font-size: 14px; outline: none;
+      transition: border-color .15s;
+    }
+    input:focus { border-color: var(--accent-border); }
+    .remember-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 16px;
+      font-size: 13px; color: var(--text-secondary); cursor: pointer;
+    }
+    .remember-row input { width: auto; }
+    .btn {
+      margin-top: 24px; width: 100%; padding: 10px; background: var(--accent);
+      border: none; border-radius: 8px; color: #fff; font-size: 14px;
+      font-weight: 600; cursor: pointer; transition: opacity .15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .error {
+      margin-top: 14px; padding: 10px 12px;
+      background: color-mix(in srgb, #e03e3e 15%, var(--bg-secondary));
+      border: 0.5px solid #e03e3e; border-radius: 8px; font-size: 13px; color: #f28b8b;
+    }
+    .blocked {
+      margin-top: 14px; padding: 10px 12px;
+      background: color-mix(in srgb, #e08c00 15%, var(--bg-secondary));
+      border: 0.5px solid #e08c00; border-radius: 8px; font-size: 13px; color: #f0b44a;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">ADOLAR</div>
+    <div class="subtitle">Bitte anmelden</div>
+
+    {% if blocked %}
+    <div class="blocked">
+      Zu viele fehlgeschlagene Versuche.<br>
+      Bitte warte noch <strong>{{ blocked_seconds // 60 + 1 }} Minuten</strong>.
+    </div>
+    {% elif error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" autocomplete="on">
+      <input type="hidden" name="next" value="{{ next }}">
+      <label for="username">Benutzername</label>
+      <input id="username" name="username" type="text" required autofocus
+             value="{{ username|default('') }}" autocomplete="username"
+             {% if blocked %}disabled{% endif %}>
+
+      <label for="password">Passwort</label>
+      <input id="password" name="password" type="password" required
+             autocomplete="current-password"
+             {% if blocked %}disabled{% endif %}>
+
+      <label class="remember-row">
+        <input type="checkbox" name="remember" value="1"> Angemeldet bleiben (30 Tage)
+      </label>
+
+      <button class="btn" type="submit" {% if blocked %}disabled{% endif %}>Anmelden</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -266,6 +266,32 @@
     }
     .field-search-input::placeholder { color: var(--text-tertiary); }
     .field-search-input:focus { border-color: var(--accent-border); }
+    /* ── User menu ────────────────────────────────────── */
+    #user-menu-wrap { position: relative; flex-shrink: 0; }
+    #btn-user-menu {
+      background: none; border: 0.5px solid var(--border-medium);
+      border-radius: 8px; color: var(--text-primary); cursor: pointer;
+      display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+      font-size: 13px; transition: border-color .15s;
+    }
+    #btn-user-menu:hover { border-color: var(--accent-border); }
+    #user-dropdown {
+      display: none; position: absolute; right: 0; top: calc(100% + 6px);
+      background: var(--bg-primary); border: 0.5px solid var(--border-medium);
+      border-radius: 8px; min-width: 180px; z-index: 200;
+      box-shadow: 0 4px 16px rgba(0,0,0,.4); overflow: hidden;
+    }
+    #user-dropdown.open { display: block; }
+    .user-dd-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 14px; font-size: 13px; color: var(--text-secondary);
+      cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+      transition: background .1s, color .1s;
+    }
+    .user-dd-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
+    .user-dd-sep { height: 0.5px; background: var(--border-subtle); margin: 4px 0; }
+    .user-dd-item.danger:hover { color: #f28b8b; }
+
     #btn-loved-filter {
       display: none;
       width: 100%;
@@ -859,6 +885,29 @@
       <button id="btn-basket-download">
         <i class="ti ti-device-floppy"></i> Als ZIP herunterladen
       </button>
+    </div>
+  </div>
+
+  <!-- User menu -->
+  <div id="user-menu-wrap">
+    <button id="btn-user-menu">
+      <i class="ti ti-user" style="font-size:14px"></i>
+      <span id="user-menu-name">…</span>
+      <i class="ti ti-chevron-down" style="font-size:11px;opacity:.6"></i>
+    </button>
+    <div id="user-dropdown">
+      <button class="user-dd-item" onclick="openChangePassword()">
+        <i class="ti ti-lock"></i> Passwort ändern
+      </button>
+      <button class="user-dd-item" id="btn-user-mgmt" style="display:none" onclick="openUserMgmt()">
+        <i class="ti ti-users"></i> Benutzerverwaltung
+      </button>
+      <div class="user-dd-sep"></div>
+      <form method="post" action="/logout" style="margin:0">
+        <button class="user-dd-item danger" type="submit">
+          <i class="ti ti-logout"></i> Abmelden
+        </button>
+      </form>
     </div>
   </div>
 </div>
@@ -2398,6 +2447,182 @@ async function checkDiscoBadge() {
   }
 }
 checkDiscoBadge();
+
+// ── Current user / auth ───────────────────────────────────────────────────────
+let _me = null;
+
+async function loadMe() {
+  try {
+    const r = await fetch("/api/me");
+    if (r.status === 401) { location.href = "/login"; return; }
+    _me = await r.json();
+  } catch { return; }
+
+  $("user-menu-name").textContent = _me.username;
+
+  if (_me.role === "admin") {
+    $("btn-user-mgmt").style.display = "flex";
+  }
+
+  // Hide Last.fm for non-admin
+  if (_me.role !== "admin") {
+    const lfmEl = document.getElementById("lastfm-status");
+    if (lfmEl) lfmEl.style.display = "none";
+    const loveBtn = document.getElementById("player-love");
+    if (loveBtn) loveBtn.style.display = "none";
+    const lovedFilter = document.getElementById("btn-loved-filter");
+    if (lovedFilter) lovedFilter.parentElement.style.display = "none";
+  }
+
+  // Hide basket (download) for users without download permission
+  if (!_me.allow_download) {
+    const wrap = $("btn-basket")?.closest("div");
+    if (wrap) wrap.style.display = "none";
+  }
+}
+loadMe();
+
+// ── User dropdown toggle ──────────────────────────────────────────────────────
+$("btn-user-menu").onclick = (e) => {
+  e.stopPropagation();
+  $("user-dropdown").classList.toggle("open");
+};
+document.addEventListener("click", (e) => {
+  if (!document.getElementById("user-menu-wrap").contains(e.target))
+    $("user-dropdown").classList.remove("open");
+});
+
+function openChangePassword() {
+  $("user-dropdown").classList.remove("open");
+  location.href = "/change-password";
+}
+
+// ── User management modal ─────────────────────────────────────────────────────
+async function openUserMgmt() {
+  $("user-dropdown").classList.remove("open");
+  $("usermgmt-modal").style.display = "flex";
+  await refreshUserList();
+  await refreshBlockedIps();
+}
+function closeUserMgmt() {
+  $("usermgmt-modal").style.display = "none";
+}
+
+async function refreshUserList() {
+  const r = await fetch("/api/users");
+  const users = await r.json();
+  const list = $("usermgmt-list");
+  list.innerHTML = "";
+  users.forEach(u => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border-subtle)";
+    const isMe = _me && u.id === _me.id;
+    row.innerHTML = `
+      <i class="ti ti-user" style="color:var(--text-tertiary);flex-shrink:0"></i>
+      <span style="flex:1;font-size:13px;color:var(--text-primary)">${esc(u.username)}</span>
+      <span style="font-size:11px;padding:2px 7px;border-radius:99px;background:${u.role==='admin'?'rgba(127,119,221,.2)':'var(--bg-secondary)'};color:${u.role==='admin'?'var(--accent)':'var(--text-tertiary)'}">${u.role}</span>
+      <label title="Download erlaubt" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-tertiary);cursor:pointer">
+        <input type="checkbox" data-uid="${u.id}" class="dl-toggle" ${u.allow_download?'checked':''}>
+        <i class="ti ti-download" style="font-size:12px"></i>
+      </label>
+      <button data-uid="${u.id}" class="pw-reset-btn" title="Passwort zurücksetzen"
+              style="background:none;border:0.5px solid var(--border-subtle);border-radius:6px;color:var(--text-tertiary);cursor:pointer;padding:3px 7px;font-size:11px" ${isMe?'style="display:none"':''}>
+        <i class="ti ti-lock-open"></i>
+      </button>
+      ${isMe ? '' : `<button data-uid="${u.id}" class="del-user-btn" title="Löschen"
+              style="background:none;border:0.5px solid var(--border-subtle);border-radius:6px;color:#e03e3e;cursor:pointer;padding:3px 7px;font-size:11px">
+        <i class="ti ti-trash"></i>
+      </button>`}
+    `;
+    list.appendChild(row);
+  });
+
+  // Download toggle
+  list.querySelectorAll(".dl-toggle").forEach(cb => {
+    cb.onchange = async () => {
+      await fetch(`/api/users/${cb.dataset.uid}/download`, {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({allow: cb.checked})
+      });
+      if (_me && cb.dataset.uid == _me.id) _me.allow_download = cb.checked;
+    };
+  });
+
+  // Password reset
+  list.querySelectorAll(".pw-reset-btn").forEach(btn => {
+    btn.onclick = async () => {
+      const pw = prompt("Neues Initialpasswort (mind. 8 Zeichen):");
+      if (!pw) return;
+      const r = await fetch(`/api/users/${btn.dataset.uid}/password`, {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({password: pw})
+      });
+      const d = await r.json();
+      if (d.error) alert(d.error);
+      else alert("Passwort gesetzt. Benutzer muss es bei nächster Anmeldung ändern.");
+    };
+  });
+
+  // Delete user
+  list.querySelectorAll(".del-user-btn").forEach(btn => {
+    btn.onclick = async () => {
+      if (!confirm("Benutzer wirklich löschen?")) return;
+      await fetch(`/api/users/${btn.dataset.uid}`, {method: "DELETE"});
+      await refreshUserList();
+    };
+  });
+}
+
+async function refreshBlockedIps() {
+  const r = await fetch("/api/admin/blocked-ips");
+  const ips = await r.json();
+  const wrap = $("usermgmt-blocks-wrap");
+  const el   = $("usermgmt-blocks");
+  if (!ips.length) { wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+  el.innerHTML = "";
+  ips.forEach(item => {
+    const rem = Math.ceil((item.blocked_until - Date.now()/1000) / 60);
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;color:var(--text-secondary)";
+    row.innerHTML = `
+      <i class="ti ti-ban" style="color:#e03e3e;font-size:12px"></i>
+      <span style="flex:1">${esc(item.ip)}</span>
+      <span style="color:var(--text-tertiary)">noch ~${rem} Min.</span>
+      <button data-ip="${esc(item.ip)}" class="unblock-btn"
+              style="background:none;border:0.5px solid var(--border-subtle);border-radius:5px;color:var(--accent);cursor:pointer;padding:2px 7px;font-size:11px">
+        Entsperren
+      </button>
+    `;
+    el.appendChild(row);
+  });
+  el.querySelectorAll(".unblock-btn").forEach(btn => {
+    btn.onclick = async () => {
+      await fetch(`/api/admin/blocked-ips/${encodeURIComponent(btn.dataset.ip)}`, {method: "DELETE"});
+      await refreshBlockedIps();
+    };
+  });
+}
+
+async function addUser() {
+  const errEl = $("usermgmt-error");
+  errEl.style.display = "none";
+  const username = $("new-user-name").value.trim();
+  const password = $("new-user-pw").value;
+  const r = await fetch("/api/users", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({username, password})
+  });
+  const d = await r.json();
+  if (d.error) {
+    errEl.textContent = d.error;
+    errEl.style.display = "block";
+  } else {
+    $("new-user-name").value = "";
+    $("new-user-pw").value = "";
+    await refreshUserList();
+  }
+}
 setInterval(checkDiscoBadge, 30000);
 
 // ── Init ───────────────────────────────────────────────────
@@ -2413,6 +2638,38 @@ setInterval(checkDiscoBadge, 30000);
   }
 })();
 </script>
+
+<!-- ── User Management Modal ── -->
+<div id="usermgmt-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this)closeUserMgmt()">
+  <div style="background:var(--bg-primary);border:0.5px solid var(--border-medium);border-radius:12px;padding:28px 32px;width:460px;max-width:95vw;max-height:85vh;overflow-y:auto;position:relative">
+    <button onclick="closeUserMgmt()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer">✕</button>
+    <div style="font-size:15px;font-weight:600;margin-bottom:20px;color:var(--text-primary)">
+      <i class="ti ti-users" style="color:var(--accent)"></i> Benutzerverwaltung
+    </div>
+
+    <!-- User list -->
+    <div id="usermgmt-list" style="margin-bottom:20px"></div>
+
+    <!-- Blocked IPs -->
+    <div id="usermgmt-blocks-wrap" style="margin-bottom:20px;display:none">
+      <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Gesperrte IPs</div>
+      <div id="usermgmt-blocks"></div>
+    </div>
+
+    <!-- Add user form -->
+    <div style="border-top:0.5px solid var(--border-subtle);padding-top:18px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Neuer Benutzer</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="new-user-name" type="text" placeholder="Benutzername"
+               style="flex:1;min-width:120px;padding:7px 10px;background:var(--bg-secondary);border:0.5px solid var(--border-subtle);border-radius:7px;color:var(--text-primary);font-size:13px;outline:none">
+        <input id="new-user-pw" type="password" placeholder="Initialpasswort (min. 8 Z.)"
+               style="flex:1;min-width:140px;padding:7px 10px;background:var(--bg-secondary);border:0.5px solid var(--border-subtle);border-radius:7px;color:var(--text-primary);font-size:13px;outline:none">
+        <button onclick="addUser()" style="padding:7px 14px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-size:13px;cursor:pointer;white-space:nowrap">Anlegen</button>
+      </div>
+      <div id="usermgmt-error" style="display:none;margin-top:8px;font-size:12px;color:#f28b8b"></div>
+    </div>
+  </div>
+</div>
 
 <div id="about-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
   <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:32px 40px;min-width:280px;text-align:center;position:relative">

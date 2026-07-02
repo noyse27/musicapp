@@ -1,21 +1,25 @@
 import os
 import html
 import logging
-from flask import Flask, jsonify, request, send_file, abort, render_template
+from flask import Flask, jsonify, request, send_file, abort, render_template, redirect, make_response, g
 from flask_cors import CORS
 import db
 import scanner
 import lastfm
+import auth as _auth
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", os.urandom(32))
 
 # Restrict CORS to origins defined via env var (space-separated).
 # Default: deny all cross-origin requests (safe for local NAS use).
 _cors_origins = os.environ.get("CORS_ORIGINS", "")
 CORS(app, origins=_cors_origins.split() if _cors_origins else [])
+
+app.before_request(_auth.before_request)
 
 MUSIC_ROOT = os.environ.get("MUSIC_ROOT", "/music")
 MAX_DOWNLOAD_IDS = int(os.environ.get("MAX_DOWNLOAD_IDS", 500))
@@ -56,8 +60,206 @@ def _int_arg(name: str, default: int, min_val: int = None, max_val: int = None) 
     return v
 
 
+# ── Auth routes ───────────────────────────────────────────────────────────────
+
+@app.get("/setup")
+def setup_get():
+    if _auth.user_count() > 0:
+        return redirect("/login")
+    return render_template("setup.html", error=None, username="")
+
+@app.post("/setup")
+def setup_post():
+    if _auth.user_count() > 0:
+        return redirect("/")
+    username  = request.form.get("username", "").strip()
+    password  = request.form.get("password", "")
+    password2 = request.form.get("password2", "")
+    err = None
+    if not username:
+        err = "Benutzername darf nicht leer sein."
+    elif len(password) < 8:
+        err = "Passwort muss mindestens 8 Zeichen haben."
+    elif password != password2:
+        err = "Passwörter stimmen nicht überein."
+    if err:
+        return render_template("setup.html", error=err, username=username)
+    user_id = _auth.create_user(username, password, role="admin")
+    # Admin doesn't need to change password on first login
+    with db.db() as conn:
+        conn.execute("UPDATE users SET must_change_password=0 WHERE id=?", (user_id,))
+    token = _auth.create_session(user_id, remember=False)
+    resp = make_response(redirect("/"))
+    resp.set_cookie(_auth.SESSION_COOKIE, token, httponly=True, samesite="Lax", max_age=_auth.SESSION_TTL)
+    return resp
+
+
+@app.get("/login")
+def login_get():
+    if _auth.user_count() == 0:
+        return redirect("/setup")
+    ip = _auth._get_client_ip()
+    blocked, secs = _auth._bf_check(ip)
+    return render_template("login.html",
+                           error=None, username="",
+                           next=request.args.get("next", "/"),
+                           blocked=blocked, blocked_seconds=secs)
+
+@app.post("/login")
+def login_post():
+    if _auth.user_count() == 0:
+        return redirect("/setup")
+    ip = _auth._get_client_ip()
+    blocked, secs = _auth._bf_check(ip)
+    if blocked:
+        return render_template("login.html", error=None, username="",
+                               next=request.form.get("next", "/"),
+                               blocked=True, blocked_seconds=secs), 429
+
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    remember = bool(request.form.get("remember"))
+    next_url = request.form.get("next", "/") or "/"
+    if not next_url.startswith("/"):
+        next_url = "/"
+
+    user = _auth.get_user_by_name(username)
+    if not user or not _auth.verify_password(user, password):
+        _auth._bf_record_failure(ip)
+        blocked2, secs2 = _auth._bf_check(ip)
+        err = "Ungültiger Benutzername oder Passwort."
+        return render_template("login.html", error=err, username=username,
+                               next=next_url, blocked=blocked2, blocked_seconds=secs2), 401
+
+    _auth._bf_clear(ip)
+    token = _auth.create_session(user["id"], remember)
+    max_age = _auth.SESSION_TTL_LONG if remember else _auth.SESSION_TTL
+    resp = make_response(redirect(next_url))
+    resp.set_cookie(_auth.SESSION_COOKIE, token, httponly=True, samesite="Lax", max_age=max_age)
+    return resp
+
+
+@app.post("/logout")
+def logout():
+    token = request.cookies.get(_auth.SESSION_COOKIE)
+    if token:
+        _auth.delete_session(token)
+    resp = make_response(redirect("/login"))
+    resp.delete_cookie(_auth.SESSION_COOKIE)
+    return resp
+
+
+@app.get("/change-password")
+def change_password_get():
+    token = request.cookies.get(_auth.SESSION_COOKIE)
+    user = _auth.get_user_by_token(token) if token else None
+    if not user:
+        return redirect("/login")
+    forced = bool(user["must_change_password"])
+    return render_template("change_password.html", error=None, forced=forced)
+
+@app.post("/api/auth/change-password")
+def api_change_password():
+    token = request.cookies.get(_auth.SESSION_COOKIE)
+    user = _auth.get_user_by_token(token) if token else None
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    data      = request.get_json(silent=True) or {}
+    password  = data.get("password", "")
+    password2 = data.get("password2", "")
+    old_pw    = data.get("old_password", "")
+    forced    = bool(user["must_change_password"])
+
+    if not forced:
+        full_user = _auth.get_user_by_name(user["username"])
+        if not _auth.verify_password(full_user, old_pw):
+            return jsonify({"error": "Aktuelles Passwort falsch."}), 400
+    if len(password) < 8:
+        return jsonify({"error": "Passwort muss mindestens 8 Zeichen haben."}), 400
+    if password != password2:
+        return jsonify({"error": "Passwörter stimmen nicht überein."}), 400
+    _auth.set_password(user["id"], password, must_change=False)
+    return jsonify({"ok": True})
+
+
+@app.get("/api/me")
+def api_me():
+    if not g.user:
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify({
+        "id":             g.user["id"],
+        "username":       g.user["username"],
+        "role":           g.user["role"],
+        "allow_download": bool(g.user["allow_download"]),
+    })
+
+
+# ── User management (admin only) ──────────────────────────────────────────────
+
+@app.get("/api/users")
+@_auth.admin_required
+def api_users_list():
+    return jsonify(_auth.get_all_users())
+
+@app.post("/api/users")
+@_auth.admin_required
+def api_users_create():
+    data     = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password", "")
+    if not username:
+        return jsonify({"error": "Benutzername fehlt."}), 400
+    if len(password) < 8:
+        return jsonify({"error": "Passwort muss mindestens 8 Zeichen haben."}), 400
+    if _auth.get_user_by_name(username):
+        return jsonify({"error": "Benutzername bereits vergeben."}), 409
+    uid = _auth.create_user(username, password, role="user")
+    return jsonify({"ok": True, "id": uid}), 201
+
+@app.delete("/api/users/<int:user_id>")
+@_auth.admin_required
+def api_users_delete(user_id):
+    if user_id == g.user["id"]:
+        return jsonify({"error": "Eigenen Account nicht löschbar."}), 400
+    _auth.delete_user(user_id)
+    return jsonify({"ok": True})
+
+@app.post("/api/users/<int:user_id>/password")
+@_auth.admin_required
+def api_users_set_password(user_id):
+    data     = request.get_json(silent=True) or {}
+    password = data.get("password", "")
+    if len(password) < 8:
+        return jsonify({"error": "Passwort muss mindestens 8 Zeichen haben."}), 400
+    _auth.set_password(user_id, password, must_change=True)
+    return jsonify({"ok": True})
+
+@app.post("/api/users/<int:user_id>/download")
+@_auth.admin_required
+def api_users_set_download(user_id):
+    data  = request.get_json(silent=True) or {}
+    allow = bool(data.get("allow", False))
+    _auth.set_allow_download(user_id, allow)
+    return jsonify({"ok": True, "allow_download": allow})
+
+@app.get("/api/admin/blocked-ips")
+@_auth.admin_required
+def api_blocked_ips():
+    return jsonify(_auth.get_blocked_ips())
+
+@app.delete("/api/admin/blocked-ips/<path:ip>")
+@_auth.admin_required
+def api_unblock_ip(ip):
+    _auth.unblock_ip(ip)
+    return jsonify({"ok": True})
+
+
+# ── Pages ─────────────────────────────────────────────────────────────────────
+
 @app.get("/")
 def index():
+    if _auth.user_count() == 0:
+        return redirect("/setup")
     return render_template("index.html")
 
 
@@ -285,6 +487,8 @@ def _parse_range(header: str, size: int):
 
 @app.post("/api/download")
 def api_download():
+    if not g.user or not g.user.get("allow_download"):
+        return jsonify({"error": "Download nicht erlaubt."}), 403
     import zipfile, io, time
     ids = request.json.get("ids", [])
     if not ids:
@@ -410,6 +614,13 @@ def api_random():
 
 # ── Last.fm ───────────────────────────────────────────────────────────────────
 
+def _require_admin_or_401():
+    if not g.user:
+        return jsonify({"error": "unauthorized"}), 401
+    if g.user["role"] != "admin":
+        return jsonify({"error": "forbidden"}), 403
+    return None
+
 @app.get("/api/lastfm/status")
 def api_lastfm_status():
     sk       = db.get_setting("lastfm_session_key")
@@ -419,9 +630,10 @@ def api_lastfm_status():
 
 @app.get("/api/lastfm/auth")
 def api_lastfm_auth():
+    err = _require_admin_or_401()
+    if err: return err
     callback = request.host_url.rstrip("/") + "/api/lastfm/callback"
     url = lastfm.get_auth_url(callback)
-    from flask import redirect
     return redirect(url)
 
 
@@ -447,6 +659,8 @@ def api_lastfm_callback():
 
 @app.post("/api/lastfm/disconnect")
 def api_lastfm_disconnect():
+    err = _require_admin_or_401()
+    if err: return err
     db.del_setting("lastfm_session_key")
     db.del_setting("lastfm_username")
     return jsonify({"ok": True})
@@ -480,6 +694,8 @@ def api_lastfm_loved_status():
 
 @app.post("/api/lastfm/loved/sync")
 def api_lastfm_loved_sync():
+    err = _require_admin_or_401()
+    if err: return err
     if not db.get_setting("lastfm_session_key"):
         return jsonify({"error": "not connected"}), 401
     _lastfm_loved_sync.update(running=True, error=None)
@@ -527,6 +743,8 @@ def api_lastfm_scrobble():
 
 @app.post("/api/lastfm/love")
 def api_lastfm_love():
+    err = _require_admin_or_401()
+    if err: return err
     sk = db.get_setting("lastfm_session_key")
     if not sk:
         return jsonify({"error": "not connected"}), 401
@@ -623,6 +841,7 @@ def api_scan_status():
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 db.init_db()
+_auth.load_persisted_blocks()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
