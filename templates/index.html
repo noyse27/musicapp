@@ -873,7 +873,7 @@
   <button id="btn-miniplayer" title="Mini-Player abdocken">
     <i class="ti ti-player-eject" style="font-size:14px"></i> Mini
   </button>
-  <div style="position:relative;flex-shrink:0">
+  <div id="basket-outer" style="display:none;position:relative;flex-shrink:0">
     <button id="btn-basket" title="Download-Korb">
       <i class="ti ti-shopping-cart-down" style="font-size:17px"></i>
       <span id="basket-label">Korb</span>
@@ -888,7 +888,6 @@
     </div>
   </div>
 
-  <!-- User menu -->
   <div id="user-menu-wrap">
     <button id="btn-user-menu">
       <i class="ti ti-user" style="font-size:14px"></i>
@@ -2474,10 +2473,15 @@ async function loadMe() {
     if (lovedFilter) lovedFilter.parentElement.style.display = "none";
   }
 
-  // Hide basket (download) for users without download permission
-  if (!_me.allow_download) {
-    const wrap = $("btn-basket")?.closest("div");
-    if (wrap) wrap.style.display = "none";
+  // Show basket only if download is permitted
+  if (_me.allow_download) {
+    $("basket-outer").style.display = "block";
+  }
+
+  // Hide scan/BPM buttons for non-admins
+  if (_me.role !== "admin") {
+    const scanWrap = document.querySelector(".sidebar-scan");
+    if (scanWrap) scanWrap.style.display = "none";
   }
 }
 loadMe();

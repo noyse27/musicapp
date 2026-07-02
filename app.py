@@ -186,11 +186,12 @@ def api_change_password():
 def api_me():
     if not g.user:
         return jsonify({"error": "unauthorized"}), 401
+    is_admin = g.user["role"] == "admin"
     return jsonify({
         "id":             g.user["id"],
         "username":       g.user["username"],
         "role":           g.user["role"],
-        "allow_download": bool(g.user["allow_download"]),
+        "allow_download": is_admin or bool(g.user["allow_download"]),
     })
 
 
